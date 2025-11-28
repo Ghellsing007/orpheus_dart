@@ -150,44 +150,52 @@ class ApiRouter {
     });
 
     router.get('/songs/<id>/stream', (Request req, String id) async {
-      final params = req.requestedUri.queryParameters;
-      final quality = params['quality'];
-      final mode = (params['mode'] ?? config.streamMode).toLowerCase();
-      final useProxy = params['proxy'] == 'true';
+      try {
+        final params = req.requestedUri.queryParameters;
+        final quality = params['quality'];
+        final mode = (params['mode'] ?? config.streamMode).toLowerCase();
+        final useProxy = params['proxy'] == 'true';
 
-      final details = await youtube.getSongDetails(id);
-      final isLive = details['isLive'] == true;
-      final url = await youtube.getSongUrl(
-        id,
-        isLive: isLive,
-        quality: quality,
-        useProxy: useProxy,
-      );
-      if (url == null) return _json({'error': 'Stream not available'}, status: 404);
+        final details = await youtube.getSongDetails(id);
+        final isLive = details['isLive'] == true;
+        final url = await youtube.getSongUrl(
+          id,
+          isLive: isLive,
+          quality: quality,
+          useProxy: useProxy,
+        );
+        if (url == null) return _json({'error': 'Stream not available'}, status: 404);
 
-      if (mode == 'redirect') {
-        return Response.found(url);
-      }
-      if (mode == 'proxy') {
-        try {
-          final client = http.Client();
-          final streamed = await client.send(
-            http.Request('GET', Uri.parse(url)),
-          );
-          final headers = <String, String>{
-            'content-type': streamed.headers['content-type'] ?? 'audio/mpeg',
-          };
-          return Response(
-            streamed.statusCode,
-            body: streamed.stream,
-            headers: headers,
-          );
-        } catch (_) {
-          return _json({'error': 'Proxy stream failed'}, status: 502);
+        if (mode == 'redirect') {
+          return Response.found(url);
         }
-      }
+        if (mode == 'proxy') {
+          try {
+            final client = http.Client();
+            final streamed = await client.send(
+              http.Request('GET', Uri.parse(url)),
+            );
+            final headers = <String, String>{
+              'content-type': streamed.headers['content-type'] ?? 'audio/mpeg',
+            };
+            return Response(
+              streamed.statusCode,
+              body: streamed.stream,
+              headers: headers,
+            );
+          } catch (err) {
+            print('Proxy stream failed for $id: $err');
+            return _json({'error': 'Proxy stream failed'}, status: 502);
+          }
+        }
 
-      return _json({'url': url, 'mode': 'url'});
+        // mode == url
+        return _json({'url': url, 'mode': 'url'});
+      } catch (err, stack) {
+        print('Stream error for $id: $err');
+        print(stack);
+        return _json({'error': 'Stream not available'}, status: 502);
+      }
     });
 
     router.get('/songs/<id>/segments', (Request req, String id) async {
