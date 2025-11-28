@@ -8,6 +8,8 @@ RUN dart pub get
 
 # Copy app source code (except anything in .dockerignore) and AOT compile app.
 COPY . .
+# Ensure OpenAPI spec is included for Swagger UI.
+COPY openapi.yaml /app/openapi.yaml
 RUN dart compile exe bin/server.dart -o bin/server
 
 # Build minimal serving image from AOT-compiled `/server`
