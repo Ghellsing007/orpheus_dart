@@ -5,7 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
-import '../services/cache_service.dart';
+import './cache_service.dart';
+import './proxy_manager.dart';
 import '../utils/formatter.dart';
 
 const Duration songCacheDuration = Duration(hours: 1, minutes: 30);
@@ -17,15 +18,19 @@ class YoutubeService {
   YoutubeService({
     this.proxyUrl,
     this.defaultQuality = 'high',
+    this.proxyPoolEnabled = true,
   }) {
     _directClient = YoutubeExplode();
     if (_isValidProxy(proxyUrl)) {
       _proxyClient = _buildProxyClient(proxyUrl!);
     }
+    _proxyManager = ProxyManager(enabled: proxyPoolEnabled);
   }
 
   final String? proxyUrl;
   final String defaultQuality;
+  final bool proxyPoolEnabled;
+  late final ProxyManager _proxyManager;
 
   late final YoutubeExplode _directClient;
   YoutubeExplode? _proxyClient;
@@ -172,11 +177,22 @@ class YoutubeService {
   }
 
   Future<String?> _getLiveUrl(String songId, {bool useProxy = false}) async {
-    final streamUrl = await _client(forceProxy: useProxy)
-        .videos
-        .streamsClient
-        .getHttpLiveStreamUrl(VideoId(songId));
-    return streamUrl;
+    try {
+      final streamUrl = await _client(forceProxy: useProxy)
+          .videos
+          .streamsClient
+          .getHttpLiveStreamUrl(VideoId(songId));
+      return streamUrl;
+    } catch (_) {
+      if (proxyPoolEnabled) {
+        return _proxyManager.getStreamUrlWithProxy(
+          songId,
+          isLive: true,
+          quality: defaultQuality,
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<String?> getSongUrl(
@@ -199,11 +215,28 @@ class YoutubeService {
       cache.invalidate(cacheKey);
     }
 
-    final manifest = await _client(forceProxy: useProxy)
-        .videos
-        .streams
-        .getManifest(songId, ytClients: [YoutubeApiClient.androidVr])
-        .timeout(const Duration(seconds: 12));
+    StreamManifest? manifest;
+    try {
+      manifest = await _client(forceProxy: useProxy)
+          .videos
+          .streams
+          .getManifest(songId, ytClients: [YoutubeApiClient.androidVr])
+          .timeout(const Duration(seconds: 12));
+    } catch (_) {
+      manifest = null;
+    }
+
+    // If manifest failed and proxy pool is enabled, try rotating proxies.
+    if (manifest == null && proxyPoolEnabled) {
+      final proxyUrl =
+          await _proxyManager.getStreamUrlWithProxy(songId, isLive: false, quality: resolvedQuality);
+      if (proxyUrl != null) {
+        cache.set(cacheKey, proxyUrl, streamCacheDuration);
+        return proxyUrl;
+      }
+    }
+
+    if (manifest == null) return null;
 
     final audioStreams = manifest.audioOnly;
     if (audioStreams.isEmpty) return null;

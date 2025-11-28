@@ -25,7 +25,10 @@ void main(List<String> args) async {
   }
 
   final mongo = MongoService(config.mongoUri);
-  final youtube = YoutubeService(proxyUrl: config.proxyUrl);
+  final youtube = YoutubeService(
+    proxyUrl: config.proxyUrl,
+    proxyPoolEnabled: config.proxyPoolEnabled,
+  );
   final users = UserRepository(mongo);
   final recommendationService = RecommendationService(users, youtube);
   final sponsorBlock = SponsorBlockService();
