@@ -19,7 +19,11 @@ class AppConfig {
       AppConfig._(port, mongoUri, proxyUrl, streamMode);
 
   static AppConfig load() {
-    final dotEnv = DotEnv(includePlatformEnvironment: true)..load();
+    final dotEnv = DotEnv(includePlatformEnvironment: true);
+    // Only load .env if it exists to avoid noisy "[dotenv] Load failed" logs.
+    if (File('.env').existsSync()) {
+      dotEnv.load();
+    }
 
     String? read(String key) => dotEnv.isDefined(key) ? dotEnv[key] : null;
 
