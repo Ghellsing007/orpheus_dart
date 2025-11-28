@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import '../config/env.dart';
 import '../data/albums_db.dart';
@@ -191,6 +192,9 @@ class ApiRouter {
 
         // mode == url
         return _json({'url': url, 'mode': 'url'});
+      } on VideoUnavailableException catch (err) {
+        print('Video unavailable for $id: $err');
+        return _json({'error': 'Video unavailable'}, status: 404);
       } catch (err, stack) {
         print('Stream error for $id: $err');
         print(stack);
