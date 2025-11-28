@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:math';
 import 'dart:io';
+import 'dart:math';
 
-import 'package:http/io_client.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 /// Lightweight proxy rotator inspired by Musify.
@@ -25,7 +25,7 @@ class ProxyManager {
   final _rand = Random();
 
   bool _isValid(String proxy) =>
-      RegExp(r'^\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+\$').hasMatch(proxy.trim());
+      RegExp(r'^\d+\.\d+\.\d+\.\d+:\d+$').hasMatch(proxy.trim());
 
   Future<void> _ensurePool() async {
     if (!enabled) return;
@@ -123,11 +123,12 @@ class ProxyManager {
     if (!enabled) return;
     try {
       const url = 'https://spys.me/proxy.txt';
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+      final res =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return;
-      for (final line in res.body.split('\\n')) {
+      for (final line in res.body.split('\n')) {
         final match = RegExp(
-                r'(?<ip>\\d+\\.\\d+\\.\\d+\\.\\d+):(?<port>\\d+)\\s(?<country>[A-Z]{2})')
+                r'(?<ip>\d+\.\d+\.\d+\.\d+):(?<port>\d+)\s(?<country>[A-Z]{2})')
             .firstMatch(line);
         if (match != null) {
           final proxy = '${match.namedGroup('ip')}:${match.namedGroup('port')}';
@@ -142,11 +143,13 @@ class ProxyManager {
     try {
       const url =
           'https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=json';
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+      final res =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return;
       final decoded = res.body;
-      for (final match in RegExp(r'"ip":"(\\d+\\.\\d+\\.\\d+\\.\\d+)","port":"(\\d+)"')
-          .allMatches(decoded)) {
+      for (final match
+          in RegExp(r'"ip":"(\d+\.\d+\.\d+\.\d+)","port":"(\d+)"')
+              .allMatches(decoded)) {
         final proxy = '${match.group(1)}:${match.group(2)}';
         if (_isValid(proxy)) _pool.add(proxy);
       }
@@ -158,11 +161,12 @@ class ProxyManager {
     try {
       const url =
           'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS.txt';
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+      final res =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return;
-      for (final line in res.body.split('\\n')) {
+      for (final line in res.body.split('\n')) {
         final match =
-            RegExp(r'(?<ip>\\d+\\.\\d+\\.\\d+\\.\\d+):(?<port>\\d+)').firstMatch(line);
+            RegExp(r'(?<ip>\d+\.\d+\.\d+\.\d+):(?<port>\d+)').firstMatch(line);
         if (match != null) {
           final proxy = '${match.namedGroup('ip')}:${match.namedGroup('port')}';
           if (_isValid(proxy)) _pool.add(proxy);
@@ -172,7 +176,10 @@ class ProxyManager {
   }
 }
 
-AudioStreamInfo _selectAudioQuality(List<AudioStreamInfo> sources, String quality) {
+AudioStreamInfo _selectAudioQuality(
+  List<AudioStreamInfo> sources,
+  String quality,
+) {
   final q = quality.toLowerCase();
   if (q == 'low') return sources.last;
   if (q == 'medium') return sources[sources.length ~/ 2];
