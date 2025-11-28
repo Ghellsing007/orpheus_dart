@@ -59,10 +59,10 @@ class ProxyManager {
   Future<YoutubeExplode?> _buildClient(String proxy, int timeoutSeconds) async {
     if (!enabled) return null;
     try {
-      final httpClient = HttpClient()
-        ..connectionTimeout = Duration(seconds: timeoutSeconds)
-        ..findProxy = (_) => 'PROXY $proxy; DIRECT'
-        ..badCertificateCallback = (_, __, ___) => false;
+      final httpClient = HttpClient();
+      httpClient.connectionTimeout = Duration(seconds: timeoutSeconds);
+      httpClient.findProxy = (_) => 'PROXY $proxy; DIRECT';
+      httpClient.badCertificateCallback = (_, __, ___) => false;
       final ioClient = IOClient(httpClient);
       return YoutubeExplode(YoutubeHttpClient(ioClient));
     } catch (_) {
