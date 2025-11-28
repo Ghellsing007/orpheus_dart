@@ -1,5 +1,5 @@
-# Use latest stable channel SDK.
-FROM dart:stable AS build
+# Use Dart 3.9.x to match pubspec SDK constraint.
+FROM dart:3.9 AS build
 
 # Resolve app dependencies.
 WORKDIR /app
