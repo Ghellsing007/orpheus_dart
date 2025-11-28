@@ -1,0 +1,301 @@
+openapi: 3.0.1
+info:
+  title: Orpheus API
+  version: "1.0.0"
+  description: Backend Musify-compatible for search/stream/playlists.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /search:
+    get:
+      summary: Search songs
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of songs
+  /suggestions:
+    get:
+      summary: Search suggestions
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Suggestions
+  /playlists:
+    get:
+      summary: Playlists curated + online
+      parameters:
+        - in: query
+          name: query
+          schema:
+            type: string
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [all, album, playlist]
+        - in: query
+          name: online
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of playlists
+  /playlists/{id}:
+    get:
+      summary: Playlist detail with songs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: userId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Playlist detail
+  /songs/{id}:
+    get:
+      summary: Song detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Song detail
+  /songs/{id}/stream:
+    get:
+      summary: Stream url or redirect
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: quality
+          schema:
+            type: string
+            enum: [low, medium, high]
+        - in: query
+          name: mode
+          schema:
+            type: string
+            enum: [redirect, proxy, url]
+        - in: query
+          name: proxy
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: URL or redirect
+  /songs/{id}/segments:
+    get:
+      summary: SponsorBlock segments
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Segments
+  /lyrics:
+    get:
+      summary: Fetch lyrics
+      parameters:
+        - in: query
+          name: artist
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: title
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lyrics result
+  /recommendations:
+    get:
+      summary: Recommendations for user or global
+      parameters:
+        - in: query
+          name: userId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recommendations
+  /users/{userId}/state:
+    get:
+      summary: User full state
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User state
+  /users/{userId}/likes/song:
+    post:
+      summary: Like/unlike song
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                songId:
+                  type: string
+                add:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated liked songs
+  /users/{userId}/likes/playlist:
+    post:
+      summary: Like/unlike playlist
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                playlistId:
+                  type: string
+                add:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated liked playlists
+  /users/{userId}/recently:
+    post:
+      summary: Add recently played
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                songId:
+                  type: string
+      responses:
+        '200':
+          description: Updated recently played
+  /users/{userId}/playlists/youtube:
+    post:
+      summary: Add YouTube playlist id
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                playlistId:
+                  type: string
+      responses:
+        '200':
+          description: Updated youtubePlaylists
+  /users/{userId}/playlists/custom:
+    post:
+      summary: Create custom playlist
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                image:
+                  type: string
+      responses:
+        '200':
+          description: Updated custom playlists
+  /users/{userId}/playlists/custom/{playlistId}/songs:
+    post:
+      summary: Add song to custom playlist
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: playlistId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                songId:
+                  type: string
+      responses:
+        '200':
+          description: Updated custom playlists
