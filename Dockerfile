@@ -12,9 +12,8 @@ COPY . .
 COPY openapi.yaml /app/openapi.yaml
 RUN dart compile exe bin/server.dart -o bin/server
 
-# Build minimal serving image from AOT-compiled `/server`
-# and the pre-built AOT-runtime. Usamos Debian slim para disponer de ffmpeg.
-FROM debian:bookworm-slim
+# Imagen de runtime basada en Dart con ffmpeg instalado.
+FROM dart:3.9 AS runtime
 
 # Environment defaults (override at runtime with -e).
 ARG PORT=8080
@@ -31,7 +30,6 @@ RUN apt-get update \
     && apt-get install -y ca-certificates ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /runtime/ /
 COPY --from=build /app/bin/server /app/bin/
 # Needed for Swagger UI in runtime.
 COPY --from=build /app/openapi.yaml /app/openapi.yaml
