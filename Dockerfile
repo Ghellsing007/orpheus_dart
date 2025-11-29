@@ -13,8 +13,8 @@ COPY openapi.yaml /app/openapi.yaml
 RUN dart compile exe bin/server.dart -o bin/server
 
 # Build minimal serving image from AOT-compiled `/server`
-# and the pre-built AOT-runtime in the `/runtime/` directory of the base image.
-FROM scratch
+# and the pre-built AOT-runtime. Usamos Debian slim para disponer de ffmpeg.
+FROM debian:bookworm-slim
 
 # Environment defaults (override at runtime with -e).
 ARG PORT=8080
@@ -25,6 +25,11 @@ ENV PORT=${PORT} \
     MONGO_URI=${MONGO_URI} \
     PROXY_URL=${PROXY_URL} \
     STREAM_MODE=${STREAM_MODE}
+
+# Dependencias mínimas + ffmpeg para descargas MP3
+RUN apt-get update \
+    && apt-get install -y ca-certificates ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /runtime/ /
 COPY --from=build /app/bin/server /app/bin/

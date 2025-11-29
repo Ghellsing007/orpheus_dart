@@ -194,6 +194,64 @@ class ApiRouter {
       return _json(song);
     });
 
+    // Transcoded MP3 download
+    router.get('/download/mp3/<id>', (Request req, String id) async {
+      try {
+        final details = await youtube.getSongDetails(id);
+        final isLive = details['isLive'] == true;
+        final url = await youtube.getSongUrl(
+          id,
+          isLive: isLive,
+          quality: 'high',
+          useProxy: false,
+        );
+        if (url == null) return _json({'error': 'Stream not available'}, status: 404);
+
+        Process process;
+        try {
+          process = await Process.start('ffmpeg', [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-i',
+            url,
+            '-vn',
+            '-acodec',
+            'libmp3lame',
+            '-b:a',
+            '192k',
+            '-f',
+            'mp3',
+            'pipe:1',
+          ]);
+        } on ProcessException catch (err) {
+          print('ffmpeg not available: $err');
+          return _json({'error': 'ffmpeg not available on server'}, status: 500);
+        }
+
+        // Construye filenames seguros: ASCII (fallback) + UTF-8 (RFC 5987) para navegadores.
+        final baseName = '${details['artist'] ?? 'audio'} - ${details['title'] ?? id}.mp3';
+        final asciiClean = id.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+        final asciiFallback = asciiClean.isNotEmpty ? asciiClean : 'audio';
+        final filenameAscii = '$asciiFallback.mp3';
+        final filenameUtf8 = Uri.encodeComponent(baseName);
+
+        return Response.ok(
+          process.stdout,
+          headers: {
+            HttpHeaders.contentTypeHeader: 'audio/mpeg',
+            // ASCII-only fallback + UTF-8 extended filename.
+            'content-disposition':
+                'attachment; filename="$filenameAscii"; filename*=UTF-8\'\'$filenameUtf8',
+          },
+        );
+      } catch (err, stack) {
+        print('Download mp3 error for $id: $err');
+        print(stack);
+        return _json({'error': 'Download not available'}, status: 502);
+      }
+    });
+
     router.get('/songs/<id>/stream', (Request req, String id) async {
       try {
         final params = req.requestedUri.queryParameters;
