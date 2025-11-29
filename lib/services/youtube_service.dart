@@ -152,14 +152,17 @@ class YoutubeService {
 
     final songs = await getPlaylistSongs(
       playlistId,
-      playlistImage: playlist.thumbnails.standardResUrl,
+      playlistImage: playlist.thumbnails.maxResUrl ?? playlist.thumbnails.standardResUrl,
       minDurationSec: minSongDurationSec,
     );
 
+    final thumb = playlist.thumbnails.maxResUrl ?? playlist.thumbnails.standardResUrl;
     final map = {
       'ytid': playlist.id.toString(),
       'title': playlist.title,
-      'image': playlist.thumbnails.maxResUrl,
+      'image': thumb,
+      'thumbnail': thumb,
+      'songCount': songs.length,
       'source': 'youtube',
       'list': songs,
     };

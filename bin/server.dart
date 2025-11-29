@@ -7,6 +7,7 @@ import 'package:shelf_swagger_ui/shelf_swagger_ui.dart';
 
 import 'package:orpheus_dart/config/env.dart';
 import 'package:orpheus_dart/repositories/user_repository.dart';
+import 'package:orpheus_dart/repositories/home_repository.dart';
 import 'package:orpheus_dart/routes/api_router.dart';
 import 'package:orpheus_dart/services/lyrics_service.dart';
 import 'package:orpheus_dart/services/mongo_service.dart';
@@ -30,6 +31,7 @@ void main(List<String> args) async {
     proxyPoolEnabled: config.proxyPoolEnabled,
   );
   final users = UserRepository(mongo);
+  final home = HomeRepository(mongo);
   final recommendationService = RecommendationService(users, youtube);
   final sponsorBlock = SponsorBlockService();
   final lyrics = LyricsService();
@@ -41,6 +43,7 @@ void main(List<String> args) async {
     recommendations: recommendationService,
     sponsorBlock: sponsorBlock,
     lyrics: lyrics,
+    home: home,
   ).build();
 
   // Serve OpenAPI spec and Swagger UI

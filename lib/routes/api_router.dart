@@ -14,6 +14,8 @@ import '../services/lyrics_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/sponsorblock_service.dart';
 import '../services/youtube_service.dart';
+import '../data/curated_home.dart';
+import '../repositories/home_repository.dart';
 
 class ApiRouter {
   ApiRouter({
@@ -23,6 +25,7 @@ class ApiRouter {
     required this.recommendations,
     required this.sponsorBlock,
     required this.lyrics,
+    required this.home,
   });
 
   final AppConfig config;
@@ -31,12 +34,31 @@ class ApiRouter {
   final RecommendationService recommendations;
   final SponsorBlockService sponsorBlock;
   final LyricsService lyrics;
+  final HomeRepository home;
 
   Router build() {
     final router = Router();
 
     router.get('/health', (Request req) {
       return _json({'status': 'ok'});
+    });
+
+    router.get('/home/curated', (Request req) async {
+      final doc = await home.getOrSeed();
+      final data = Map<String, dynamic>.from(doc)..remove('status');
+      return _json(data);
+    });
+
+    router.post('/home/curated/refresh', (Request req) async {
+      final section = req.requestedUri.queryParameters['section'] ?? 'artists';
+      final limit = int.tryParse(req.requestedUri.queryParameters['limit'] ?? '') ?? 3;
+      final data = await hydrateCuratedChunk(
+        youtube,
+        home,
+        section: section,
+        limit: limit,
+      );
+      return _json(data);
     });
 
     router.get('/search', (Request req) async {

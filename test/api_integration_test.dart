@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dotenv/dotenv.dart';
 import 'package:orpheus_dart/config/env.dart';
 import 'package:orpheus_dart/repositories/user_repository.dart';
+import 'package:orpheus_dart/repositories/home_repository.dart';
 import 'package:orpheus_dart/routes/api_router.dart';
 import 'package:orpheus_dart/services/lyrics_service.dart';
 import 'package:orpheus_dart/services/mongo_service.dart';
@@ -34,6 +35,7 @@ void main() {
     mongo = MongoService(mongoUri);
     yt = YoutubeService(proxyUrl: config.proxyUrl);
     final users = UserRepository(mongo);
+    final home = HomeRepository(mongo);
     final recs = RecommendationService(users, yt);
     final sponsor = SponsorBlockService();
     final lyrics = LyricsService();
@@ -45,6 +47,7 @@ void main() {
       recommendations: recs,
       sponsorBlock: sponsor,
       lyrics: lyrics,
+      home: home,
     ).build();
 
     handler = const Pipeline().addHandler(router.call);

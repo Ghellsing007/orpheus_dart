@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:orpheus_dart/config/env.dart';
 import 'package:orpheus_dart/repositories/user_repository.dart';
+import 'package:orpheus_dart/repositories/home_repository.dart';
 import 'package:orpheus_dart/routes/api_router.dart';
 import 'package:orpheus_dart/services/lyrics_service.dart';
 import 'package:orpheus_dart/services/recommendation_service.dart';
@@ -14,6 +15,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 void main() {
   late Handler handler;
   late FakeUserRepository fakeUsers;
+  late FakeHomeRepository fakeHome;
 
   setUp(() {
     final config = AppConfig.manual(
@@ -24,6 +26,7 @@ void main() {
     );
     final youtube = FakeYoutubeService();
     fakeUsers = FakeUserRepository();
+    fakeHome = FakeHomeRepository();
     final recommendations = FakeRecommendationService();
     final sponsor = FakeSponsorBlockService();
     final lyrics = FakeLyricsService();
@@ -35,6 +38,7 @@ void main() {
       recommendations: recommendations,
       sponsorBlock: sponsor,
       lyrics: lyrics,
+      home: fakeHome,
     ).build();
 
     handler = const Pipeline().addHandler(router.call);
@@ -483,5 +487,30 @@ class FakeUserRepository implements UserRepository {
     final u = await getUser(userId);
     u['playlistFolders'] = folders;
     return u;
+  }
+}
+
+class FakeHomeRepository implements HomeRepository {
+  Map<String, dynamic>? _doc;
+
+  @override
+  Future<Map<String, dynamic>?> getDoc() async => _doc;
+
+  @override
+  Future<Map<String, dynamic>> getOrSeed() async {
+    _doc ??= {
+      "_id": "home",
+      "artists": [],
+      "trending": [],
+      "featuredPlaylists": [],
+      "moodPlaylists": [],
+      "status": {"artists": 0, "trending": 0, "featuredPlaylists": 0, "moodPlaylists": 0},
+    };
+    return _doc!;
+  }
+
+  @override
+  Future<void> saveDoc(Map<String, dynamic> doc) async {
+    _doc = doc;
   }
 }
