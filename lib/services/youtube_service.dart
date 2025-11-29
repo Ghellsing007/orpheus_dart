@@ -12,7 +12,9 @@ import '../utils/formatter.dart';
 const Duration songCacheDuration = Duration(hours: 1, minutes: 30);
 const Duration playlistCacheDuration = Duration(hours: 5);
 const Duration searchCacheDuration = Duration(days: 4);
+const Duration channelCacheDuration = Duration(hours: 3);
 const Duration streamCacheDuration = Duration(hours: 3);
+const int minSongDurationSec = 90; // Evita shorts/teasers demasiado cortos en toda la API
 
 class YoutubeService {
   YoutubeService({
@@ -68,9 +70,42 @@ class YoutubeService {
         .search
         .search(query)
         .timeout(const Duration(seconds: 12));
-    final songs = results.map((video) => returnSongLayout(0, video)).toList();
+    final songs = results
+        .whereType<Video>()
+        .where((video) => _isDurationValid(video))
+        .map((video) => returnSongLayout(0, video))
+        .toList();
     cache.set(cacheKey, songs, searchCacheDuration);
     return songs;
+  }
+
+  Future<List<Map<String, dynamic>>> searchChannels(String query) async {
+    final cacheKey = 'channel_search_$query';
+    final cached = cache.get<List<Map<String, dynamic>>>(cacheKey);
+    if (cached != null) return cached;
+
+    final results = await _client()
+        .search
+        .searchContent(
+          query,
+          filter: TypeFilters.channel,
+        )
+        .timeout(const Duration(seconds: 12));
+
+    final channels = results.whereType<SearchChannel>().map((channel) {
+      final thumb = channel.thumbnails.isNotEmpty ? _sanitizeThumb(channel.thumbnails.first.url.toString()) : null;
+      return {
+        'id': channel.id.value,
+        'ytid': channel.id.value,
+        'title': channel.name,
+        'name': channel.name,
+        'description': channel.description,
+        if (thumb != null) 'image': thumb,
+      };
+    }).toList();
+
+    cache.set(cacheKey, channels, searchCacheDuration);
+    return channels;
   }
 
   Future<List<String>> getSuggestions(String query) async {
@@ -88,6 +123,7 @@ class YoutubeService {
   Future<List<Map<String, dynamic>>> getPlaylistSongs(
     String playlistId, {
     String? playlistImage,
+    int minDurationSec = minSongDurationSec,
   }) async {
     final cacheKey = 'playlistSongs_$playlistId';
     final cached = cache.get<List<Map<String, dynamic>>>(cacheKey);
@@ -95,6 +131,7 @@ class YoutubeService {
 
     final songList = <Map<String, dynamic>>[];
     await for (final song in _client().playlists.getVideos(playlistId)) {
+      if (!_isDurationValid(song, minDurationSec: minDurationSec)) continue;
       songList.add(
         returnSongLayout(songList.length, song, playlistImage: playlistImage),
       );
@@ -116,6 +153,7 @@ class YoutubeService {
     final songs = await getPlaylistSongs(
       playlistId,
       playlistImage: playlist.thumbnails.standardResUrl,
+      minDurationSec: minSongDurationSec,
     );
 
     final map = {
@@ -134,9 +172,84 @@ class YoutubeService {
         .videos
         .get(songId)
         .timeout(const Duration(seconds: 12));
-    final related =
-        await _client().videos.getRelatedVideos(song) ?? <Video>[];
-    return related.map((s) => returnSongLayout(0, s)).toList();
+    final related = await _client().videos.getRelatedVideos(song) ?? <Video>[];
+    return related
+        .where(_isDurationValid)
+        .map((s) => returnSongLayout(0, s))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getChannelSongs(
+    String channelId, {
+    int limit = 30,
+    int minDurationSec = minSongDurationSec,
+    String? channelTitle,
+  }) async {
+    final cacheKey = 'channelSongs_${channelId}_$limit';
+    final cached = cache.get<List<Map<String, dynamic>>>(cacheKey);
+    if (cached != null) return cached;
+
+    final uploads = <Map<String, dynamic>>[];
+    try {
+      await for (final video in _client().channels.getUploads(channelId)) {
+        if (!_isDurationValid(video, minDurationSec: minDurationSec)) continue; // evita shorts/teasers muy cortos
+        uploads.add(_channelSongLayout(uploads.length, video, channelTitle: channelTitle));
+        if (uploads.length >= limit) break;
+      }
+    } catch (_) {}
+
+    cache.set(cacheKey, uploads, channelCacheDuration);
+    return uploads;
+  }
+
+  Future<Map<String, dynamic>> getChannelDetails(String channelId) async {
+    final cacheKey = 'channel_$channelId';
+    final cached = cache.get<Map<String, dynamic>>(cacheKey);
+    if (cached != null) return cached;
+
+    Channel? channel;
+    ChannelAbout? about;
+    try {
+      channel = await _client().channels.get(channelId).timeout(const Duration(seconds: 12));
+      about = await _client().channels.getAboutPage(channelId).timeout(const Duration(seconds: 12));
+    } catch (_) {}
+
+    final topSongs = await getChannelSongs(
+      channelId,
+      limit: 20,
+      minDurationSec: minSongDurationSec,
+      channelTitle: channel?.title ?? about?.title,
+    );
+
+    List<Map<String, dynamic>> playlists = <Map<String, dynamic>>[];
+    try {
+      if (channel != null) {
+        playlists = await searchPlaylistsOnline(channel.title);
+      }
+    } catch (_) {}
+
+    String? aboutThumb;
+    if (about != null && about.thumbnails.isNotEmpty) {
+      aboutThumb = _sanitizeThumb(about.thumbnails.first.url.toString());
+    }
+
+    final map = {
+      'id': channelId,
+      'ytid': channelId,
+      'title': channel?.title ?? about?.title ?? channelId,
+      'name': channel?.title ?? about?.title ?? channelId,
+      'handle': null,
+      'image': channel?.logoUrl ?? aboutThumb,
+      'banner': channel?.bannerUrl,
+      'subscribers': channel?.subscribersCount,
+      'description': about?.description,
+      'topSongs': topSongs,
+      'playlists': playlists,
+      'related': <Map<String, dynamic>>[],
+    };
+
+    cache.set(cacheKey, map, channelCacheDuration);
+    return map;
   }
 
   Future<Map<String, dynamic>> getSongDetails(String songId) async {
@@ -257,6 +370,15 @@ class YoutubeService {
     return sources.withHighestBitrate();
   }
 
+  bool _isDurationValid(
+    Video song, {
+    int minDurationSec = minSongDurationSec,
+  }) {
+    final duration = song.duration?.inSeconds;
+    if (duration == null) return false;
+    return duration >= minDurationSec;
+  }
+
   Future<bool> _validateUrl(String url) async {
     try {
       final res = await http.head(Uri.parse(url)).timeout(
@@ -275,5 +397,29 @@ class YoutubeService {
     try {
       _proxyClient?.close();
     } catch (_) {}
+  }
+
+  Map<String, dynamic> _channelSongLayout(
+    int index,
+    Video song, {
+    String? channelTitle,
+  }) {
+    return {
+      'id': index,
+      'ytid': song.id.toString(),
+      'title': formatSongTitle(song.title),
+      'artist': channelTitle ?? song.author,
+      'image': song.thumbnails.standardResUrl,
+      'lowResImage': song.thumbnails.lowResUrl,
+      'highResImage': song.thumbnails.maxResUrl,
+      'duration': song.duration?.inSeconds,
+      'isLive': song.isLive,
+    };
+  }
+
+  String? _sanitizeThumb(String? url) {
+    if (url == null) return null;
+    if (url.startsWith('https:https://')) return url.replaceFirst('https:', '');
+    return url;
   }
 }

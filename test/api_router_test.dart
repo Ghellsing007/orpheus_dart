@@ -76,6 +76,33 @@ void main() {
     expect(body['list'], isA<List>());
   });
 
+  test('channel search returns channels', () async {
+    final res = await handler(
+      Request('GET', Uri.parse('http://localhost/channel/search?q=taylor')),
+    );
+    final body = jsonDecode(await res.readAsString()) as Map;
+    expect(body['items'], isA<List>());
+    expect((body['items'] as List).first['ytid'], 'chan-1');
+  });
+
+  test('channel detail returns meta and songs', () async {
+    final res = await handler(
+      Request('GET', Uri.parse('http://localhost/channel/chan-1')),
+    );
+    final body = jsonDecode(await res.readAsString()) as Map;
+    expect(body['ytid'], 'chan-1');
+    expect(body['topSongs'], isA<List>());
+  });
+
+  test('channel songs endpoint returns list', () async {
+    final res = await handler(
+      Request('GET', Uri.parse('http://localhost/channel/chan-1/songs')),
+    );
+    final body = jsonDecode(await res.readAsString()) as Map;
+    expect(body['items'], isA<List>());
+    expect((body['items'] as List).first['ytid'], 'song-chan');
+  });
+
   test('stream redirect returns 302 with location', () async {
     final res = await handler(
       Request('GET', Uri.parse('http://localhost/songs/song-1/stream?mode=redirect')),
@@ -199,6 +226,9 @@ class FakeYoutubeService implements YoutubeService {
   String get defaultQuality => 'high';
 
   @override
+  bool get proxyPoolEnabled => false;
+
+  @override
   YoutubeExplode get clientForTests => YoutubeExplode();
 
   @override
@@ -206,7 +236,7 @@ class FakeYoutubeService implements YoutubeService {
 
   @override
   Future<List<Map<String, dynamic>>> getPlaylistSongs(String playlistId,
-      {String? playlistImage}) async {
+      {String? playlistImage, int minDurationSec = 60}) async {
     return [
       _song('song-1'),
       _song('song-2'),
@@ -231,6 +261,44 @@ class FakeYoutubeService implements YoutubeService {
   @override
   Future<Map<String, dynamic>> getSongDetails(String songId) async =>
       _song(songId);
+
+  @override
+  Future<List<Map<String, dynamic>>> searchChannels(String query) async => [
+        {
+          'id': 'chan-1',
+          'ytid': 'chan-1',
+          'title': 'Channel 1',
+          'name': 'Channel 1',
+          'image': 'img',
+        }
+      ];
+
+  @override
+  Future<Map<String, dynamic>> getChannelDetails(String channelId) async => {
+        'id': channelId,
+        'ytid': channelId,
+        'title': 'Channel $channelId',
+        'name': 'Channel $channelId',
+        'image': 'img',
+        'banner': 'banner',
+        'description': 'desc',
+        'topSongs': [
+          _song('song-chan'),
+        ],
+        'playlists': [
+          {
+            'ytid': 'pl-chan',
+            'title': 'Playlist chan',
+            'source': 'youtube',
+            'list': <Map<String, dynamic>>[],
+          }
+        ],
+        'related': <Map<String, dynamic>>[],
+      };
+
+  @override
+  Future<List<Map<String, dynamic>>> getChannelSongs(String channelId, {int limit = 30, int minDurationSec = 25, String? channelTitle}) async =>
+      [_song('song-chan')];
 
   @override
   Future<String?> getSongUrl(String songId,

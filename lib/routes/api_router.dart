@@ -57,6 +57,28 @@ class ApiRouter {
       return _json({'items': suggestions});
     });
 
+    router.get('/channel/search', (Request req) async {
+      final query = req.requestedUri.queryParameters['q'];
+      if (query == null || query.isEmpty) {
+        return _json({'error': 'Missing q'}, status: 400);
+      }
+      final channels = await youtube.searchChannels(query);
+      return _json({'items': channels});
+    });
+
+    router.get('/channel/<id>', (Request req, String id) async {
+      final channel = await youtube.getChannelDetails(id);
+      return _json(channel);
+    });
+
+    router.get('/channel/<id>/songs', (Request req, String id) async {
+      final params = req.requestedUri.queryParameters;
+      final limitParam = params['limit'];
+      final limit = int.tryParse(limitParam ?? '') ?? 30;
+      final songs = await youtube.getChannelSongs(id, limit: limit);
+      return _json({'items': songs});
+    });
+
     router.get('/playlists', (Request req) async {
       final params = req.requestedUri.queryParameters;
       final query = params['query']?.toLowerCase();
