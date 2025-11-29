@@ -197,14 +197,31 @@ class ApiRouter {
     // Transcoded MP3 download
     router.get('/download/mp3/<id>', (Request req, String id) async {
       try {
-        final details = await youtube.getSongDetails(id);
-        final isLive = details['isLive'] == true;
-        final url = await youtube.getSongUrl(
-          id,
-          isLive: isLive,
-          quality: 'high',
-          useProxy: false,
-        );
+        Map<String, dynamic>? details;
+        bool isLive = false;
+        try {
+          details = await youtube.getSongDetails(id);
+          isLive = details['isLive'] == true;
+        } on VideoUnavailableException {
+          details = null;
+          isLive = false;
+        }
+
+        String? url;
+        try {
+          url = await youtube.getSongUrl(id, isLive: isLive, quality: 'high', useProxy: false);
+        } on VideoUnavailableException {
+          url = null;
+        }
+
+        // Fallback con proxy si está habilitado
+        if (url == null && youtube.proxyPoolEnabled) {
+          try {
+            url = await youtube.getSongUrl(id, isLive: isLive, quality: 'high', useProxy: true);
+          } catch (_) {
+            url = null;
+          }
+        }
         if (url == null) return _json({'error': 'Stream not available'}, status: 404);
 
         Process process;
@@ -230,7 +247,7 @@ class ApiRouter {
         }
 
         // Construye filenames seguros: ASCII (fallback) + UTF-8 (RFC 5987) para navegadores.
-        final baseName = '${details['artist'] ?? 'audio'} - ${details['title'] ?? id}.mp3';
+        final baseName = '${details?['artist'] ?? 'audio'} - ${details?['title'] ?? id}.mp3';
         final asciiClean = id.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
         final asciiFallback = asciiClean.isNotEmpty ? asciiClean : 'audio';
         final filenameAscii = '$asciiFallback.mp3';
@@ -372,7 +389,12 @@ class ApiRouter {
       final body = await _jsonBody(req);
       final songId = body['songId']?.toString();
       if (songId == null) return _json({'error': 'songId required'}, status: 400);
-      final song = await youtube.getSongDetails(songId);
+      Map<String, dynamic> song;
+      try {
+        song = await youtube.getSongDetails(songId);
+      } on VideoUnavailableException {
+        return _json({'error': 'Song unavailable'}, status: 404);
+      }
       final user = await users.addRecentlyPlayed(userId, song);
       return _json({'recentlyPlayed': user['recentlyPlayed']});
     });
