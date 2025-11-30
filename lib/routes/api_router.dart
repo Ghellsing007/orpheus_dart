@@ -144,17 +144,48 @@ class ApiRouter {
     });
 
     router.get('/channel/<id>', (Request req, String id) async {
-      final channel = await youtube.getChannelDetails(id);
+      // Decode por si viene URL encoded desde el cliente
+      final decodedId = Uri.decodeComponent(id);
+      String channelId = decodedId;
+      final looksLikeId = RegExp(r'^UC[0-9A-Za-z_-]{20,}$').hasMatch(decodedId);
+
+      // Si no parece un channelId, búscalo por nombre
+      if (!looksLikeId) {
+        try {
+          final found = await youtube.searchChannels(decodedId);
+          if (found.isEmpty) {
+            return _json({'error': 'Channel not found'}, status: 404);
+          }
+          channelId = found.first['ytid'] as String? ?? id;
+        } catch (_) {
+          return _json({'error': 'Channel not found'}, status: 404);
+        }
+      }
+
+      final channel = await youtube.getChannelDetails(channelId);
+      // Intenta persistir en artistas para reutilizarlo luego
+      try {
+        await media.persistArtistFromYoutube(channel);
+      } catch (_) {}
       return _json(channel);
     });
 
     // Artist details: prefer DB, fallback to YouTube then persist
     router.get('/artists/<id>', (Request req, String id) async {
-      final stored = await media.getArtistById(id);
+      final decodedId = Uri.decodeComponent(id);
+      final stored = await media.getArtistById(decodedId);
       if (stored != null) return _json(stored.toMap());
 
       try {
-        final payload = await youtube.getChannelDetails(id);
+        String channelId = decodedId;
+        final looksLikeId = RegExp(r'^UC[0-9A-Za-z_-]{20,}$').hasMatch(decodedId);
+        if (!looksLikeId) {
+          final found = await youtube.searchChannels(decodedId);
+          if (found.isNotEmpty) {
+            channelId = found.first['ytid'] as String? ?? decodedId;
+          }
+        }
+        final payload = await youtube.getChannelDetails(channelId);
         final persisted = await media.persistArtistFromYoutube(payload);
         return _json(persisted.toMap());
       } catch (err) {
