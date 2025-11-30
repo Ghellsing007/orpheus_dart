@@ -509,6 +509,10 @@ class ApiRouter {
         req.requestedUri.queryParameters['playlistLimit'],
         defaultValue: user['likedPlaylists']?.length ?? _defaultPageSize,
       );
+      final artistLimit = _parseLimit(
+        req.requestedUri.queryParameters['artistLimit'],
+        defaultValue: user['likedArtists']?.length ?? _defaultPageSize,
+      );
       final shaped = Map<String, dynamic>.from(user);
       shaped['likedSongs'] =
           List<Map<String, dynamic>>.from(shaped['likedSongs'] ?? [])
@@ -517,6 +521,10 @@ class ApiRouter {
       shaped['likedPlaylists'] =
           List<Map<String, dynamic>>.from(shaped['likedPlaylists'] ?? [])
               .take(playlistLimit)
+              .toList();
+      shaped['likedArtists'] =
+          List<Map<String, dynamic>>.from(shaped['likedArtists'] ?? [])
+              .take(artistLimit)
               .toList();
       shaped['recentlyPlayed'] =
           List<Map<String, dynamic>>.from(shaped['recentlyPlayed'] ?? [])
@@ -640,6 +648,24 @@ class ApiRouter {
       return _json({
         'likedPlaylists': user['likedPlaylists'],
         'count': (user['likedPlaylists'] as List).length,
+      });
+    });
+
+    router.post('/users/<userId>/likes/artist', (
+      Request req,
+      String userId,
+    ) async {
+      final body = await _jsonBody(req);
+      final artistId = body['artistId']?.toString();
+      final add = body['add'] != false;
+      if (artistId == null) {
+        return _json({'error': 'artistId required'}, status: 400);
+      }
+      final artist = await youtube.getChannelDetails(artistId);
+      final user = await users.likeArtist(userId, artist, add: add);
+      return _json({
+        'likedArtists': user['likedArtists'],
+        'count': (user['likedArtists'] as List).length,
       });
     });
 

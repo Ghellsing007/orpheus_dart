@@ -36,6 +36,7 @@ class UserRepository {
         'likedSongs': <Map<String, dynamic>>[],
         'likedPlaylists': <Map<String, dynamic>>[],
         'recentlyPlayed': <Map<String, dynamic>>[],
+        'likedArtists': <Map<String, dynamic>>[],
         'customPlaylists': <Map<String, dynamic>>[],
         'playlistFolders': <Map<String, dynamic>>[],
         'youtubePlaylists': <String>[],
@@ -70,6 +71,22 @@ class UserRepository {
       liked.removeWhere((p) => p['ytid'] == playlist['ytid']);
     }
     user['likedPlaylists'] = liked;
+    return _save(userId, user);
+  }
+
+  Future<Map<String, dynamic>> likeArtist(
+    String userId,
+    Map<String, dynamic> artist, {
+    required bool add,
+  }) async {
+    final user = await getUser(userId);
+    final liked = List<Map<String, dynamic>>.from(user['likedArtists'] ?? []);
+    if (add) {
+      if (!liked.any((a) => a['ytid'] == artist['ytid'])) liked.add(artist);
+    } else {
+      liked.removeWhere((a) => a['ytid'] == artist['ytid']);
+    }
+    user['likedArtists'] = liked;
     return _save(userId, user);
   }
 
