@@ -21,13 +21,12 @@ String formatSongTitle(String title) {
     replacementsForSongTitle.keys.map(RegExp.escape).join('|'),
   );
 
-  var finalTitle =
-      title
-          .replaceAllMapped(
-            pattern,
-            (match) => replacementsForSongTitle[match.group(0)] ?? '',
-          )
-          .trimLeft();
+  var finalTitle = title
+      .replaceAllMapped(
+        pattern,
+        (match) => replacementsForSongTitle[match.group(0)] ?? '',
+      )
+      .trimLeft();
 
   finalTitle = finalTitle.replaceAll(wordsPatternForSongTitle, '');
 
@@ -38,20 +37,40 @@ Map<String, dynamic> returnSongLayout(
   int index,
   Video song, {
   String? playlistImage,
-}) =>
-    {
-      'id': index,
-      'ytid': song.id.toString(),
-      'title': formatSongTitle(
-        song.title.split('-')[song.title.split('-').length - 1],
-      ),
-      'artist': song.title.split('-')[0],
-      'image': playlistImage ?? song.thumbnails.standardResUrl,
-      'lowResImage': playlistImage ?? song.thumbnails.lowResUrl,
-      'highResImage': playlistImage ?? song.thumbnails.maxResUrl,
-      'duration': song.duration?.inSeconds,
-      'isLive': song.isLive,
-    };
+}) => {
+  'id': index,
+  'ytid': song.id.toString(),
+  'title': formatSongTitle(
+    song.title.split('-')[song.title.split('-').length - 1],
+  ),
+  'artist': song.title.split('-')[0],
+  // Prioriza los thumbnails propios; si no hay, cae al thumbnail de la playlist
+  // y como último recurso genera uno con el id del video.
+  'image':
+      _validThumb(song.thumbnails.standardResUrl, song.id) ??
+      _validThumb(song.thumbnails.maxResUrl, song.id) ??
+      _validThumb(song.thumbnails.lowResUrl, song.id) ??
+      'https://img.youtube.com/vi/${song.id}/sddefault.jpg',
+  'lowResImage':
+      _validThumb(song.thumbnails.lowResUrl, song.id) ??
+      _validThumb(song.thumbnails.standardResUrl, song.id) ??
+      'https://img.youtube.com/vi/${song.id}/sddefault.jpg',
+  'highResImage':
+      _validThumb(song.thumbnails.maxResUrl, song.id) ??
+      _validThumb(song.thumbnails.standardResUrl, song.id) ??
+      'https://img.youtube.com/vi/${song.id}/maxresdefault.jpg',
+  'duration': song.duration?.inSeconds,
+  'isLive': song.isLive,
+};
+
+String? _validThumb(String? url, dynamic videoId) {
+  if (url == null) return null;
+  final id = videoId.toString();
+  final looksLikePlaylist = url.contains('/vi/PL');
+  final belongsToVideo = url.contains('/vi/$id');
+  if (looksLikePlaylist && !belongsToVideo) return null;
+  return url;
+}
 
 String formatDuration(int audioDurationInSeconds) {
   final duration = Duration(seconds: audioDurationInSeconds);

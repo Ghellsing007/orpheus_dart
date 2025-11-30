@@ -11,13 +11,14 @@ Future<void> main() async {
   final mongo = MongoService(mongoUri);
   final repo = HomeRepository(mongo);
   final doc = await repo.getOrSeed();
-  int count(List list) => list.where((e) => (e as Map)['ytid'] != null && ((e as Map)['ytid'] as String).isNotEmpty).length;
-  print('Artists: ${count(List.from(doc['artists'] ?? []))}/${curatedArtistNames.length}');
-  print('Trending: ${count(List.from(doc['trending'] ?? []))}/${curatedTrendingNames.length}');
-  print('Featured: ${count(List.from(doc['featuredPlaylists'] ?? []))}/${curatedFeaturedPlaylistNames.length}');
-  print('Mood: ${(doc['moodPlaylists'] as List? ?? []).length}/${curatedMoodSeeds.length}');
-  print('Status: ${doc['status']}');
-  if ((doc['artists'] as List).isNotEmpty) print('Ej artista: ${(doc['artists'] as List).first}');
-  if ((doc['trending'] as List).isNotEmpty) print('Ej trending: ${(doc['trending'] as List).first}');
-  if ((doc['featuredPlaylists'] as List).isNotEmpty) print('Ej playlist: ${(doc['featuredPlaylists'] as List).first}');
+  final sections = await repo.getSections();
+  final status = Map<String, dynamic>.from(doc['status'] ?? {});
+  print('Artists: ${status['artists'] ?? 0}/${curatedArtistNames.length}');
+  print('Trending: ${status['trending'] ?? 0}/${curatedTrendingNames.length}');
+  print('Featured: ${status['featuredPlaylists'] ?? 0}/${curatedFeaturedPlaylistNames.length}');
+  print('Mood: ${status['moodPlaylists'] ?? 0}/${curatedMoodSeeds.length}');
+  print('Status: $status');
+  if (sections.isNotEmpty) {
+    print('Sections stored: ${sections.map((s) => '${s.type.name}:${s.itemIds.length}/${s.collectionIds.length}').join(', ')}');
+  }
 }

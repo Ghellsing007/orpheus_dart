@@ -145,18 +145,26 @@ class YoutubeService {
     final cached = cache.get<Map<String, dynamic>>(cacheKey);
     if (cached != null) return cached;
 
-    final playlist = await _client()
-        .playlists
-        .get(playlistId)
-        .timeout(const Duration(seconds: 12));
+    final playlist = await _client().playlists.get(playlistId).timeout(
+          const Duration(seconds: 12),
+        );
 
     final songs = await getPlaylistSongs(
       playlistId,
-      playlistImage: playlist.thumbnails.maxResUrl ?? playlist.thumbnails.standardResUrl,
       minDurationSec: minSongDurationSec,
     );
 
-    final thumb = playlist.thumbnails.maxResUrl ?? playlist.thumbnails.standardResUrl;
+    String? thumb = playlist.thumbnails.maxResUrl ?? playlist.thumbnails.standardResUrl;
+    // Algunos thumbnails de playlist vienen con URL inválida usando el ID de la playlist como si fuera video.
+    final firstSongThumb = songs.isNotEmpty
+        ? (songs.first['image'] ?? songs.first['lowResImage'] ?? songs.first['highResImage'] ??
+            songs.first['thumbnail'])
+        : null;
+    final looksLikePlaylistVideoThumb = thumb != null && (thumb.contains('/vi/PL') || thumb.contains('/vi/$playlistId'));
+    if (thumb == null || looksLikePlaylistVideoThumb) {
+      thumb = firstSongThumb;
+    }
+
     final map = {
       'ytid': playlist.id.toString(),
       'title': playlist.title,

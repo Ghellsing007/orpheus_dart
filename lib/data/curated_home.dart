@@ -1,8 +1,9 @@
-import '../services/cache_service.dart';
-import '../services/youtube_service.dart';
+import '../models/media_models.dart';
 import '../repositories/home_repository.dart';
+import '../repositories/media_repository.dart';
+import '../services/youtube_service.dart';
 
-/// Semilla minimal por nombres; los IDs reales se resolverán vía YouTube.
+/// Semilla de artistas, playlists y moods para la pantalla de inicio.
 const curatedArtistNames = [
   "Bad Bunny",
   "Karol G",
@@ -30,14 +31,20 @@ const curatedTrendingNames = [
   {"title": "Despechá", "artist": "ROSALÍA"},
   {"title": "Ella Baila Sola", "artist": "Eslabón Armado Peso Pluma"},
   {"title": "TQM", "artist": "Feid"},
-  {"title": "Qué Más Pues?", "artist": "J Balvin Maria Becerra"},
+  {"title": "Quién Más Pues?", "artist": "J Balvin Maria Becerra"},
   {"title": "Un x100to", "artist": "Grupo Frontera Bad Bunny"},
   {"title": "Flowers", "artist": "Miley Cyrus"},
   {"title": "Kill Bill", "artist": "SZA"},
   {"title": "Creepin'", "artist": "Metro Boomin The Weeknd 21 Savage"},
   {"title": "Me Porto Bonito", "artist": "Bad Bunny Chencho Corleone"},
-  {"title": "Shakira: Bzrp Music Sessions, Vol. 53", "artist": "Shakira Bizarrap"},
-  {"title": "Ella No Es Tuya Remix", "artist": "Myke Towers Anitta Nicki Nicole"},
+  {
+    "title": "Shakira: Bzrp Music Sessions, Vol. 53",
+    "artist": "Shakira Bizarrap",
+  },
+  {
+    "title": "Ella No Es Tuya Remix",
+    "artist": "Myke Towers Anitta Nicki Nicole",
+  },
   {"title": "La Bachata", "artist": "Manuel Turizo"},
   {"title": "Desesperados", "artist": "Rauw Alejandro Chencho Corleone"},
   {"title": "Anti-Hero", "artist": "Taylor Swift"},
@@ -49,27 +56,37 @@ const curatedTrendingNames = [
   {"title": "Stay", "artist": "The Kid LAROI Justin Bieber"},
 ];
 
-const curatedFeaturedPlaylistNames = [
-  "Top 100 Global",
-  "Trending Worldwide",
-  "Today's Biggest Hits",
-  "New Released Tracks",
-  "Hotlist Internacional",
-  "Pop Hits 2025",
-  "Best Pop Music",
-  "Pop Rising",
-  "Viral Pop",
-  "Éxitos Latinos",
-  "Reggaeton Hits",
-  "Bachata Mix",
-  "Top Música Mexicana",
-  "Lofi Beats",
-  "Chill Vibes",
-  "Relaxing Lofi Mix",
-  "Rap & Trap Hits",
-  "EDM Party Mix",
-  "Rock Classics",
-  "R&B Vibes",
+const curatedFeaturedPlaylistSeeds = [
+  // Añade ytid cuando lo conozcamos para evitar búsquedas y usar metadata real.
+  {"title": "Top 100 Global", "ytid": "PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i"},
+  {"title": "Trending Worldwide", "ytid": "PLFcGX84jKOu7fnNxRpajpvs-Zk3Za41ul"},
+  {
+    "title": "Today's Biggest Hits",
+    "ytid": "PLO7-VO1D0_6MlO4UxJWFBUq3U-7zoIBf7",
+  },
+  {
+    "title": "New Released Tracks",
+    "ytid": "PL3-sRm8xAzY9gpXTMGVHJWy_FMD67NBed",
+  },
+  {
+    "title": "Hotlist Internacional",
+    "ytid": "PL3-sRm8xAzY_Rr7jgjrVCEy1JnNPuVp0W",
+  },
+  {"title": "Pop Hits 2025"},
+  {"title": "Best Pop Music"},
+  {"title": "Pop Rising"},
+  {"title": "Viral Pop"},
+  {"title": "Éxitos Latinos"},
+  {"title": "Reggaeton Hits"},
+  {"title": "Bachata Mix"},
+  {"title": "Top Música Mexicana"},
+  {"title": "Lofi Beats"},
+  {"title": "Chill Vibes"},
+  {"title": "Relaxing Lofi Mix"},
+  {"title": "Rap & Trap Hits"},
+  {"title": "EDM Party Mix"},
+  {"title": "Rock Classics"},
+  {"title": "R&B Vibes"},
 ];
 
 const curatedMoodSeeds = [
@@ -79,7 +96,7 @@ const curatedMoodSeeds = [
       {"title": "Kill Bill", "artist": "SZA"},
       {"title": "Calm Down", "artist": "Rema Selena Gomez"},
       {"title": "Anti-Hero", "artist": "Taylor Swift"},
-    ]
+    ],
   },
   {
     "title": "Happy / Good Vibes",
@@ -87,7 +104,7 @@ const curatedMoodSeeds = [
       {"title": "Flowers", "artist": "Miley Cyrus"},
       {"title": "Provenza", "artist": "Karol G"},
       {"title": "Me Porto Bonito", "artist": "Bad Bunny Chencho"},
-    ]
+    ],
   },
   {
     "title": "Sad / Heartbreak",
@@ -95,7 +112,7 @@ const curatedMoodSeeds = [
       {"title": "Bzrp Music Sessions #53", "artist": "Shakira Bizarrap"},
       {"title": "Stay", "artist": "The Kid LAROI Justin Bieber"},
       {"title": "Monotonía", "artist": "Shakira Ozuna"},
-    ]
+    ],
   },
   {
     "title": "Energy / Upbeat / Gym",
@@ -103,203 +120,78 @@ const curatedMoodSeeds = [
       {"title": "Pepas", "artist": "Farruko"},
       {"title": "Creepin'", "artist": "Metro Boomin The Weeknd 21 Savage"},
       {"title": "Un x100to", "artist": "Grupo Frontera Bad Bunny"},
-    ]
+    ],
   },
 ];
 
-Map<String, dynamic> curatedHomeResponse() => {
-      "artists": curatedArtistNames.map((name) => {"name": name}).toList(),
-      "trending": curatedTrendingNames,
-      "featuredPlaylists": curatedFeaturedPlaylistNames.map((name) => {"title": name}).toList(),
-      "moodPlaylists": curatedMoodSeeds,
-    };
+final _sectionConfig = [
+  ['artists', 5, curatedArtistNames.length],
+  ['trending', 5, curatedTrendingNames.length],
+  ['featured', 4, curatedFeaturedPlaylistSeeds.length],
+  ['mood', 4, curatedMoodSeeds.length],
+];
 
-/// Hydrates curated home data using YouTube endpoints (search by name) and caches the result.
+/// Hydrates all sections and keeps a preview map to drive the frontend without extra calls.
 Future<Map<String, dynamic>> hydrateCuratedHome(
-  YoutubeService youtube, {
+  YoutubeService youtube,
+  HomeRepository repo,
+  MediaRepositoryBase media, {
   bool forceRefresh = false,
 }) async {
-  // Artists: buscar canal por nombre
-  final artists = <Map<String, dynamic>>[];
-  for (final name in curatedArtistNames) {
-    try {
-      final channels = await youtube.searchChannels(name);
-      if (channels.isNotEmpty) {
-        final ch = channels.first;
-        final channelDetails = await youtube.getChannelDetails(ch['ytid'] as String);
-        artists.add(channelDetails);
-      } else {
-        artists.add({
-          "name": name,
-          "id": name,
-          "ytid": name,
-          "image": "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256",
-        });
-      }
-    } catch (_) {
-      artists.add({
-        "name": name,
-        "id": name,
-        "ytid": name,
-        "image": "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256",
-      });
-    }
+  await migrateLegacyHome(repo);
+  for (final entry in _sectionConfig) {
+    final sectionKey = entry[0] as String;
+    final chunkLimit = forceRefresh ? entry[2] as int : entry[1] as int;
+    await hydrateCuratedChunk(
+      youtube,
+      repo,
+      media,
+      section: sectionKey,
+      limit: chunkLimit,
+    );
   }
 
-  // Trending: buscar canción por título+artista
-  final trending = <Map<String, dynamic>>[];
-  for (final seed in curatedTrendingNames) {
-    final query = "${seed["title"]} ${seed["artist"]}";
-    try {
-      final songs = await youtube.searchSongs(query);
-      final song = songs.firstWhere(
-        (s) => (s["duration"] ?? 0) >= 90,
-        orElse: () => songs.isNotEmpty ? songs.first : {},
-      );
-      if (song.isNotEmpty) {
-        trending.add(song);
-        continue;
-      }
-    } catch (_) {}
-    trending.add({
-      "ytid": query,
-      "title": seed["title"],
-      "artist": seed["artist"],
-      "thumbnail": "https://ui-avatars.com/api/?name=${Uri.encodeComponent(seed["title"] as String)}&background=111827&color=fff&size=256",
-      "duration": 0,
-      "source": "youtube",
-    });
-  }
-
-  // Featured playlists: buscar playlist por nombre
-  final featured = <Map<String, dynamic>>[];
-  for (final name in curatedFeaturedPlaylistNames) {
-    try {
-      final found = await youtube.searchPlaylistsOnline(name);
-      if (found.isNotEmpty) {
-        final pl = found.first;
-        final ytid = pl["ytid"] as String;
-        try {
-          final info = await youtube.getPlaylistInfo(ytid);
-          featured.add(info);
-        } catch (_) {
-          final image = (pl["image"] as String?) ??
-              "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256";
-          featured.add({
-            "id": ytid,
-            "ytid": ytid,
-            "title": pl["title"] ?? name,
-            "thumbnail": image,
-            "image": image,
-            "source": "youtube",
-            "songCount": 0,
-            "list": <Map<String, dynamic>>[],
-          });
-        }
-        continue;
-      }
-    } catch (_) {}
-    featured.add({
-      "id": name,
-      "ytid": name,
-      "title": name,
-      "thumbnail": "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256",
-      "image": "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256",
-      "source": "youtube",
-      "songCount": 0,
-      "list": <Map<String, dynamic>>[],
-    });
-  }
-
-  // Mood playlists: buscar canciones por nombre
-  final moods = <Map<String, dynamic>>[];
-  for (final mood in curatedMoodSeeds) {
-    final songs = <Map<String, dynamic>>[];
-    for (final s in (mood["songs"] as List)) {
-      final query = "${s["title"]} ${s["artist"]}";
-      try {
-        final res = await youtube.searchSongs(query);
-        final song = res.firstWhere(
-          (song) => (song["duration"] ?? 0) >= 90,
-          orElse: () => res.isNotEmpty ? res.first : {},
-        );
-        if (song.isNotEmpty) {
-          songs.add(song);
-          continue;
-        }
-      } catch (_) {}
-      songs.add({
-        "ytid": query,
-        "title": s["title"],
-        "artist": s["artist"],
-        "thumbnail": "https://ui-avatars.com/api/?name=${Uri.encodeComponent(s["title"] as String)}&background=111827&color=fff&size=256",
-        "duration": 0,
-        "source": "youtube",
-      });
-    }
-    moods.add({
-      "title": mood["title"],
-      "songs": songs,
-    });
-  }
-
-  final result = {
-    "artists": artists,
-    "trending": trending,
-    "featuredPlaylists": featured,
-    "moodPlaylists": moods,
+  final doc = await repo.getOrSeed();
+  final sections = _sectionsFromDoc(doc);
+  final previews = await repo.getPreviews();
+  return {
+    'sections': sections.map((s) => s.toMap()).toList(),
+    'previews': previews,
+    'status': doc['status'] ?? {},
+    'updatedAt': doc['updatedAt'],
   };
-  return result;
 }
 
-/// Hydrates a single section chunk and persists via repository.
 Future<Map<String, dynamic>> hydrateCuratedChunk(
   YoutubeService youtube,
-  HomeRepository repo, {
+  HomeRepository repo,
+  MediaRepositoryBase media, {
   required String section,
   int limit = 3,
 }) async {
+  await migrateLegacyHome(repo);
   final doc = await repo.getOrSeed();
   final status = Map<String, dynamic>.from(doc['status'] ?? {});
+  final sections = _sectionsFromDoc(doc);
+  final previews = Map<String, Map<String, dynamic>>.from(
+    doc['previews'] ?? {},
+  );
+  final sectionType = _sectionTypeFromKey(section);
+  final targetSection = _ensureSection(sections, sectionType);
 
   switch (section) {
     case 'artists':
       {
         final cursor = status['artists'] ?? 0;
         final seeds = curatedArtistNames;
-        final list = List<Map<String, dynamic>>.from(doc['artists'] ?? []);
         final end = (cursor + limit).clamp(0, seeds.length);
-        while (list.length < end) {
-          list.add(<String, dynamic>{});
-        }
-        for (int i = cursor; i < end; i++) {
+        for (var i = cursor; i < end; i++) {
           final name = seeds[i];
-          try {
-            final channels = await youtube.searchChannels(name);
-            if (channels.isNotEmpty) {
-              final ch = channels.first;
-              final channelDetails = await youtube.getChannelDetails(ch['ytid'] as String);
-              list[i] = channelDetails;
-            } else {
-              list[i] = {
-                "name": name,
-                "id": name,
-                "ytid": name,
-                "image":
-                    "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256",
-              };
-            }
-          } catch (_) {
-            list[i] = {
-              "name": name,
-              "id": name,
-              "ytid": name,
-              "image":
-                  "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256",
-            };
-          }
+          final payload = await _resolveArtist(youtube, name);
+          final artist = await media.persistArtistFromYoutube(payload);
+          _addUnique(targetSection.itemIds, artist.ytid);
+          previews[artist.ytid] = artist.toPreview();
         }
-        doc['artists'] = list;
         status['artists'] = end;
         break;
       }
@@ -307,90 +199,51 @@ Future<Map<String, dynamic>> hydrateCuratedChunk(
       {
         final cursor = status['trending'] ?? 0;
         final seeds = curatedTrendingNames;
-        final list = List<Map<String, dynamic>>.from(doc['trending'] ?? []);
         final end = (cursor + limit).clamp(0, seeds.length);
-        while (list.length < end) {
-          list.add(<String, dynamic>{});
-        }
-        for (int i = cursor; i < end; i++) {
+        var processed = cursor;
+        for (var i = cursor; i < end; i++) {
           final seed = seeds[i];
-          final query = "${seed["title"]} ${seed["artist"]}";
-          try {
-            final songs = await youtube.searchSongs(query);
-            final song = songs.firstWhere(
-              (s) => (s["duration"] ?? 0) >= 90,
-              orElse: () => songs.isNotEmpty ? songs.first : {},
-            );
-            if (song.isNotEmpty) {
-              list[i] = song;
-              continue;
-            }
-          } catch (_) {}
-          list[i] = {
-            "ytid": query,
-            "title": seed["title"],
-            "artist": seed["artist"],
-            "thumbnail":
-                "https://ui-avatars.com/api/?name=${Uri.encodeComponent(seed["title"] as String)}&background=111827&color=fff&size=256",
-            "duration": 0,
-            "source": "youtube",
-          };
+          final payload = await _resolveSong(
+            youtube,
+            seed['title'] as String,
+            seed['artist'] as String,
+          );
+          if (payload == null) {
+            print('WARN: Could not resolve trending seed ${seed['title']}');
+            break; // no avanzamos el cursor; reintenta en siguiente corrida
+          }
+          final song = await media.persistSongFromYoutube(
+            payload,
+            sections: {HomeSectionType.trendingSongs},
+          );
+          _addUnique(targetSection.itemIds, song.ytid);
+          previews[song.ytid] = song.toPreview();
+          processed = i + 1;
         }
-        doc['trending'] = list;
-        status['trending'] = end;
+        status['trending'] = processed;
         break;
       }
     case 'featured':
     case 'featuredPlaylists':
       {
         final cursor = status['featuredPlaylists'] ?? 0;
-        final seeds = curatedFeaturedPlaylistNames;
-        final list = List<Map<String, dynamic>>.from(doc['featuredPlaylists'] ?? []);
+        final seeds = curatedFeaturedPlaylistSeeds;
         final end = (cursor + limit).clamp(0, seeds.length);
-        while (list.length < end) {
-          list.add(<String, dynamic>{});
+        for (var i = cursor; i < end; i++) {
+          final seed = seeds[i];
+          final payload = await _resolvePlaylist(
+            youtube,
+            title: seed['title'] as String,
+            playlistId: seed['ytid'] as String?,
+          );
+          final result = await media.persistCollectionFromYoutube(
+            payload,
+            type: CollectionType.playlist,
+            sections: {HomeSectionType.featuredPlaylists},
+          );
+          _addUnique(targetSection.collectionIds, result.collection.ytid);
+          previews[result.collection.ytid] = _buildPlaylistPreview(result);
         }
-        for (int i = cursor; i < end; i++) {
-          final name = seeds[i];
-          try {
-            final found = await youtube.searchPlaylistsOnline(name);
-            if (found.isNotEmpty) {
-              final pl = found.first;
-              final ytid = pl["ytid"] as String;
-              try {
-                final info = await youtube.getPlaylistInfo(ytid);
-                list[i] = info;
-              } catch (_) {
-                final image = (pl["image"] as String?) ??
-                    "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256";
-                list[i] = {
-                  "id": ytid,
-                  "ytid": ytid,
-                  "title": pl["title"] ?? name,
-                  "thumbnail": image,
-                  "image": image,
-                  "source": "youtube",
-                  "songCount": 0,
-                  "list": <Map<String, dynamic>>[],
-                };
-              }
-              continue;
-            }
-          } catch (_) {}
-          list[i] = {
-            "id": name,
-            "ytid": name,
-            "title": name,
-            "thumbnail":
-                "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256",
-            "image":
-                "https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256",
-            "source": "youtube",
-            "songCount": 0,
-            "list": <Map<String, dynamic>>[],
-          };
-        }
-        doc['featuredPlaylists'] = list;
         status['featuredPlaylists'] = end;
         break;
       }
@@ -399,43 +252,36 @@ Future<Map<String, dynamic>> hydrateCuratedChunk(
       {
         final cursor = status['moodPlaylists'] ?? 0;
         final seeds = curatedMoodSeeds;
-        final list = List<Map<String, dynamic>>.from(doc['moodPlaylists'] ?? []);
         final end = (cursor + limit).clamp(0, seeds.length);
-        while (list.length < end) {
-          list.add(<String, dynamic>{});
-        }
-        for (int i = cursor; i < end; i++) {
+        for (var i = cursor; i < end; i++) {
           final mood = seeds[i];
+          final title = mood['title'] as String;
           final songs = <Map<String, dynamic>>[];
-          for (final s in (mood["songs"] as List)) {
-            final query = "${s["title"]} ${s["artist"]}";
-            try {
-              final res = await youtube.searchSongs(query);
-              final song = res.firstWhere(
-                (song) => (song["duration"] ?? 0) >= 90,
-                orElse: () => res.isNotEmpty ? res.first : {},
-              );
-              if (song.isNotEmpty) {
-                songs.add(song);
-                continue;
-              }
-            } catch (_) {}
-            songs.add({
-              "ytid": query,
-              "title": s["title"],
-              "artist": s["artist"],
-              "thumbnail":
-                  "https://ui-avatars.com/api/?name=${Uri.encodeComponent(s["title"] as String)}&background=111827&color=fff&size=256",
-              "duration": 0,
-              "source": "youtube",
-            });
+          for (final data in (mood['songs'] as List)) {
+            final payload = await _resolveSong(
+              youtube,
+              data['title'] as String,
+              data['artist'] as String,
+            );
+            if (payload != null) {
+              songs.add(payload);
+            }
           }
-          list[i] = {
-            "title": mood["title"],
-            "songs": songs,
+          final payload = {
+            'ytid': _moodId(title),
+            'title': title,
+            'source': 'curated-mood',
+            'list': songs,
           };
+          final result = await media.persistCollectionFromYoutube(
+            payload,
+            type: CollectionType.mood,
+            mood: title,
+            sections: {HomeSectionType.moodPlaylists},
+          );
+          _addUnique(targetSection.collectionIds, result.collection.ytid);
+          previews[result.collection.ytid] = _buildPlaylistPreview(result);
         }
-        doc['moodPlaylists'] = list;
         status['moodPlaylists'] = end;
         break;
       }
@@ -444,9 +290,302 @@ Future<Map<String, dynamic>> hydrateCuratedChunk(
   }
 
   doc['status'] = status;
-  doc['updatedAt'] = DateTime.now().toIso8601String();
-  await repo.saveDoc(doc);
+  await repo.persistSections(sections, previews, baseDoc: doc);
 
-  final response = Map<String, dynamic>.from(doc)..remove('status');
-  return response;
+  return {
+    'sections': sections.map((s) => s.toMap()).toList(),
+    'previews': previews,
+    'status': status,
+    'updatedAt': doc['updatedAt'],
+  };
 }
+
+List<HomeSection> _sectionsFromDoc(Map<String, dynamic> doc) {
+  final rawSections = List<Map<String, dynamic>>.from(doc['sections'] ?? []);
+  return rawSections.map(HomeSection.fromMap).toList();
+}
+
+HomeSection _ensureSection(List<HomeSection> sections, HomeSectionType type) {
+  final index = sections.indexWhere((section) => section.type == type);
+  if (index != -1) return sections[index];
+  final section = HomeSection(type: type);
+  sections.add(section);
+  return section;
+}
+
+HomeSectionType _sectionTypeFromKey(String key) {
+  switch (key) {
+    case 'artists':
+      return HomeSectionType.popularArtists;
+    case 'trending':
+      return HomeSectionType.trendingSongs;
+    case 'featured':
+    case 'featuredPlaylists':
+      return HomeSectionType.featuredPlaylists;
+    case 'mood':
+    case 'moodPlaylists':
+      return HomeSectionType.moodPlaylists;
+    default:
+      return HomeSectionType.featuredPlaylists;
+  }
+}
+
+void _addUnique(List<String> list, String id) {
+  if (!list.contains(id)) {
+    list.add(id);
+  }
+}
+
+Map<String, dynamic> _buildPlaylistPreview(CollectionPersistenceResult result) {
+  final previewSongs = result.songs.map((song) => song.toPreview()).toList();
+  final firstSongThumb = previewSongs.isNotEmpty
+      ? (previewSongs.first['thumbnail'] as String?)
+      : null;
+  // Prioriza siempre la portada del primer track; si no hay, usa la de la colección.
+  var thumb = firstSongThumb ?? result.collection.image;
+  final map = result.collection.toPreview(
+    songs: previewSongs,
+    thumbnail: thumb,
+  );
+  if (result.collection.type == CollectionType.mood) {
+    map['type'] = 'playlist';
+  }
+  return map;
+}
+
+String _moodId(String title) =>
+    'mood-${Uri.encodeComponent(title.toLowerCase())}';
+
+/// Migra cache antiguo (artists/trending/featuredPlaylists/moodPlaylists) a sections+previews
+/// para que el frontend no dependa del formato legacy.
+Future<void> migrateLegacyHome(HomeRepository repo) async {
+  final doc = await repo.getOrSeed();
+  final hasSections = (doc['sections'] as List?)?.isNotEmpty == true;
+  if (hasSections) return;
+
+  final sections = <HomeSection>[];
+  final previews = <String, Map<String, dynamic>>{};
+
+  // Artists -> popularArtists
+  final artistsList =
+      (doc['artists'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
+      [];
+  if (artistsList.isNotEmpty) {
+    final section = HomeSection(type: HomeSectionType.popularArtists);
+    for (final artist in artistsList) {
+      final id = (artist['ytid'] ?? artist['id'])?.toString() ?? '';
+      if (id.isEmpty) continue;
+      section.itemIds.add(id);
+      previews[id] = {
+        'ytid': id,
+        'title': artist['name'] ?? artist['title'] ?? id,
+        'image': artist['image'] ?? artist['thumbnail'],
+        'banner': artist['banner'],
+        'type': 'artist',
+        'subscribers': artist['subscribers'],
+      };
+    }
+    sections.add(section);
+  }
+
+  // Trending songs -> trendingSongs
+  final trendingList =
+      (doc['trending'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
+      [];
+  if (trendingList.isNotEmpty) {
+    final section = HomeSection(type: HomeSectionType.trendingSongs);
+    for (final song in trendingList) {
+      final id = (song['ytid'] ?? song['id'])?.toString() ?? '';
+      if (id.isEmpty) continue;
+      section.itemIds.add(id);
+      previews[id] = _songPreviewFromRaw(song);
+    }
+    sections.add(section);
+  }
+
+  // Featured playlists -> featuredPlaylists
+  final featuredList =
+      (doc['featuredPlaylists'] as List?)
+          ?.whereType<Map<String, dynamic>>()
+          .toList() ??
+      [];
+  if (featuredList.isNotEmpty) {
+    final section = HomeSection(type: HomeSectionType.featuredPlaylists);
+    for (final pl in featuredList) {
+      final id = (pl['ytid'] ?? pl['id'])?.toString() ?? '';
+      if (id.isEmpty) continue;
+      section.collectionIds.add(id);
+      previews[id] = _playlistPreviewFromRaw(pl);
+    }
+    sections.add(section);
+  }
+
+  // Mood playlists -> moodPlaylists
+  final moodList =
+      (doc['moodPlaylists'] as List?)
+          ?.whereType<Map<String, dynamic>>()
+          .toList() ??
+      [];
+  if (moodList.isNotEmpty) {
+    final section = HomeSection(type: HomeSectionType.moodPlaylists);
+    for (final mood in moodList) {
+      final title = mood['title']?.toString() ?? 'Mood';
+      final id = _moodId(title);
+      section.collectionIds.add(id);
+      final songs =
+          (mood['songs'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
+      previews[id] = {
+        'ytid': id,
+        'title': title,
+        'thumbnail': _avatarUrl(title),
+        'image': _avatarUrl(title),
+        'songCount': songs.length,
+        'type': 'playlist',
+        'mood': title,
+        'songs': songs.map(_songPreviewFromRaw).toList(),
+      };
+    }
+    sections.add(section);
+  }
+
+  doc['sections'] = sections.map((s) => s.toMap()).toList();
+  doc['previews'] = previews;
+  await repo.persistSections(sections, previews, baseDoc: doc);
+}
+
+Map<String, dynamic> _songPreviewFromRaw(Map<String, dynamic> raw) {
+  final id = (raw['ytid'] ?? raw['id'])?.toString() ?? '';
+  final thumb =
+      raw['image'] ??
+      raw['thumbnail'] ??
+      _avatarUrl(raw['title']?.toString() ?? id);
+  return {
+    'ytid': id,
+    'title': raw['title'] ?? '',
+    'artist': raw['artist'] ?? '',
+    'thumbnail': thumb,
+    'image': thumb,
+    'duration': raw['duration'],
+    'isLive': raw['isLive'],
+    'type': 'song',
+    'source': raw['source'],
+  };
+}
+
+Map<String, dynamic> _playlistPreviewFromRaw(Map<String, dynamic> raw) {
+  final id = (raw['ytid'] ?? raw['id'])?.toString() ?? '';
+  final thumb =
+      raw['image'] ??
+      raw['thumbnail'] ??
+      _avatarUrl(raw['title']?.toString() ?? id);
+  final songs =
+      (raw['list'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
+  return {
+    'ytid': id,
+    'title': raw['title'] ?? '',
+    'thumbnail': thumb,
+    'image': thumb,
+    'songCount': raw['songCount'] ?? songs.length,
+    'type': 'playlist',
+    'songs': songs.map(_songPreviewFromRaw).toList(),
+    'source': raw['source'],
+  };
+}
+
+Future<Map<String, dynamic>> _resolveArtist(
+  YoutubeService youtube,
+  String name,
+) async {
+  try {
+    final channels = await youtube.searchChannels(name);
+    if (channels.isNotEmpty) {
+      final channel = channels.first;
+      return await youtube.getChannelDetails(channel['ytid'] as String);
+    }
+  } catch (_) {}
+  return {
+    'ytid': name,
+    'name': name,
+    'title': name,
+    'image': _avatarUrl(name),
+    'source': 'curated-fallback',
+  };
+}
+
+Future<Map<String, dynamic>?> _resolveSong(
+  YoutubeService youtube,
+  String title,
+  String artist,
+) async {
+  final query = '$title $artist';
+  try {
+    final songs = await youtube.searchSongs(query);
+    final valid = songs.firstWhere(
+      (song) => (song['duration'] ?? 0) >= 90,
+      orElse: () => songs.isNotEmpty ? songs.first : {},
+    );
+    final ytid = valid['ytid']?.toString() ?? '';
+    if (valid.isNotEmpty && _looksLikeVideoId(ytid)) return valid;
+  } catch (_) {}
+  // No devolvemos fallback con ytid inválido; forzamos reintento en la siguiente corrida.
+  return null;
+}
+
+Future<Map<String, dynamic>> _resolvePlaylist(
+  YoutubeService youtube, {
+  required String title,
+  String? playlistId,
+}) async {
+  try {
+    // Si tenemos el id, intentamos directamente.
+    if (playlistId != null && playlistId.isNotEmpty) {
+      final info = await youtube.getPlaylistInfo(playlistId);
+      if (info.isNotEmpty) return info;
+    }
+  } catch (_) {}
+  try {
+    final found = await youtube.searchPlaylistsOnline(title);
+    if (found.isNotEmpty) {
+      final playlist = found.first;
+      final ytid = playlist['ytid'] as String;
+      return await youtube.getPlaylistInfo(ytid);
+    }
+  } catch (_) {}
+  // Fallback: arma una playlist ad-hoc buscando canciones por el título.
+  try {
+    final songs = await youtube.searchSongs('$title playlist');
+    if (songs.isNotEmpty) {
+      final thumb =
+          songs.first['image'] ?? songs.first['thumbnail'] ?? _avatarUrl(title);
+      return {
+        'ytid': title,
+        'title': title,
+        'image': thumb,
+        'thumbnail': thumb,
+        'source': 'curated-fallback',
+        'songCount': songs.length,
+        'list': songs,
+      };
+    }
+  } catch (_) {}
+
+  final fallbackImage = _avatarUrl(title);
+  return {
+    'ytid': title,
+    'title': title,
+    'image': fallbackImage,
+    'thumbnail': fallbackImage,
+    'source': 'curated-fallback',
+    'songCount': 0,
+    'list': <Map<String, dynamic>>[],
+  };
+}
+
+String _avatarUrl(String name) =>
+    'https://ui-avatars.com/api/?name=${Uri.encodeComponent(name)}&background=111827&color=fff&size=256';
+
+bool _looksLikeVideoId(String id) =>
+    RegExp(r'^[A-Za-z0-9_-]{6,}$').hasMatch(id);

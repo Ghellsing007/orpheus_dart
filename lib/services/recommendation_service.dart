@@ -1,15 +1,19 @@
+import '../models/media_models.dart';
+import '../repositories/media_repository.dart';
 import '../repositories/user_repository.dart';
 import '../services/youtube_service.dart';
 
 class RecommendationService {
   RecommendationService(
     this._users,
-    this._yt, {
+    this._yt,
+    this._media, {
     this.globalPlaylistId = 'PLgzTt0k8mXzEk586ze4BjvDXR7c-TUSnx',
   });
 
   final UserRepository _users;
   final YoutubeService _yt;
+  final MediaRepositoryBase _media;
   final String globalPlaylistId;
 
   Future<List<Map<String, dynamic>>> recommendations(
@@ -22,10 +26,18 @@ class RecommendationService {
     );
 
     if (defaultRecommendations && recently.isNotEmpty) {
-      return _fromRecentlyPlayed(recently);
+      final songs = await _fromRecentlyPlayed(recently);
+      return _persistSongList(
+        songs,
+        sections: {HomeSectionType.recommendations},
+      );
     }
 
-    return _mixed(user);
+    final mixed = await _mixed(user);
+    return _persistSongList(
+      mixed,
+      sections: {HomeSectionType.recommendations},
+    );
   }
 
   Future<List<Map<String, dynamic>>> _fromRecentlyPlayed(
@@ -90,5 +102,18 @@ class RecommendationService {
       }
     }
     return unique;
+  }
+
+  Future<List<Map<String, dynamic>>> _persistSongList(
+    List<Map<String, dynamic>> songs, {
+    Set<HomeSectionType>? sections,
+  }) async {
+    final persisted = await Future.wait(songs.map((song) {
+      return _media.persistSongFromYoutube(
+        song,
+        sections: sections,
+      );
+    }));
+    return persisted.map((song) => song.toMap()).toList();
   }
 }

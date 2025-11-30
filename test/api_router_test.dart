@@ -1,8 +1,10 @@
 import 'dart:convert';
 
 import 'package:orpheus_dart/config/env.dart';
+import 'package:orpheus_dart/models/media_models.dart';
 import 'package:orpheus_dart/repositories/user_repository.dart';
 import 'package:orpheus_dart/repositories/home_repository.dart';
+import 'package:orpheus_dart/repositories/media_repository.dart';
 import 'package:orpheus_dart/routes/api_router.dart';
 import 'package:orpheus_dart/services/lyrics_service.dart';
 import 'package:orpheus_dart/services/recommendation_service.dart';
@@ -16,6 +18,7 @@ void main() {
   late Handler handler;
   late FakeUserRepository fakeUsers;
   late FakeHomeRepository fakeHome;
+  late FakeMediaRepository fakeMedia;
 
   setUp(() {
     final config = AppConfig.manual(
@@ -27,6 +30,7 @@ void main() {
     final youtube = FakeYoutubeService();
     fakeUsers = FakeUserRepository();
     fakeHome = FakeHomeRepository();
+    fakeMedia = FakeMediaRepository();
     final recommendations = FakeRecommendationService();
     final sponsor = FakeSponsorBlockService();
     final lyrics = FakeLyricsService();
@@ -39,6 +43,7 @@ void main() {
       sponsorBlock: sponsor,
       lyrics: lyrics,
       home: fakeHome,
+      media: fakeMedia,
     ).build();
 
     handler = const Pipeline().addHandler(router.call);
@@ -500,11 +505,15 @@ class FakeHomeRepository implements HomeRepository {
   Future<Map<String, dynamic>> getOrSeed() async {
     _doc ??= {
       "_id": "home",
-      "artists": [],
-      "trending": [],
-      "featuredPlaylists": [],
-      "moodPlaylists": [],
-      "status": {"artists": 0, "trending": 0, "featuredPlaylists": 0, "moodPlaylists": 0},
+      "sections": <Map<String, dynamic>>[],
+      "status": {
+        "artists": 0,
+        "trending": 0,
+        "featuredPlaylists": 0,
+        "moodPlaylists": 0,
+      },
+      "previews": <String, Map<String, dynamic>>{},
+      "updatedAt": DateTime.now().toIso8601String(),
     };
     return _doc!;
   }
@@ -513,4 +522,100 @@ class FakeHomeRepository implements HomeRepository {
   Future<void> saveDoc(Map<String, dynamic> doc) async {
     _doc = doc;
   }
+
+  @override
+  Future<List<HomeSection>> getSections() async {
+    final doc = await getOrSeed();
+    final raw = List<Map<String, dynamic>>.from(doc['sections'] ?? []);
+    return raw.map(HomeSection.fromMap).toList();
+  }
+
+  @override
+  Future<Map<String, Map<String, dynamic>>> getPreviews() async {
+    final doc = await getOrSeed();
+    final raw = Map<String, dynamic>.from(doc['previews'] ?? {});
+    return raw.map((key, value) => MapEntry(key, Map<String, dynamic>.from(value)));
+  }
+
+  @override
+  Future<void> persistSections(
+    List<HomeSection> sections,
+    Map<String, Map<String, dynamic>> previews, {
+    Map<String, dynamic>? baseDoc,
+  }) async {
+    final doc = baseDoc ?? await getOrSeed();
+    doc['sections'] = sections.map((section) => section.toMap()).toList();
+    doc['previews'] = previews.map((key, value) => MapEntry(key, value));
+    doc['updatedAt'] = DateTime.now().toIso8601String();
+    _doc = doc;
+  }
+}
+
+class FakeMediaRepository implements MediaRepositoryBase {
+  @override
+  Future<Artist> persistArtistFromYoutube(
+    Map<String, dynamic> payload, {
+    Set<String>? relatedArtistIds,
+  }) async {
+    return Artist.fromYoutube(payload).copyWith(
+      relatedArtistIds: relatedArtistIds,
+    );
+  }
+
+  @override
+  Future<Song> persistSongFromYoutube(
+    Map<String, dynamic> payload, {
+    String? artistId,
+    Set<String>? playlistIds,
+    Set<String>? collectionIds,
+    Set<HomeSectionType>? sections,
+  }) async {
+    return Song.fromYoutube(payload).copyWith(
+      artistId: artistId,
+      playlistIds: playlistIds,
+      collectionIds: collectionIds,
+      sections: sections,
+    );
+  }
+
+  @override
+  Future<CollectionPersistenceResult> persistCollectionFromYoutube(
+    Map<String, dynamic> payload, {
+    CollectionType type = CollectionType.playlist,
+    Set<String>? additionalSongIds,
+    Set<String>? artistIds,
+    String? ownerId,
+    String? mood,
+    Set<HomeSectionType>? sections,
+  }) async {
+    final baseSongIds = (payload['songIds'] as Iterable?)?.whereType<String>().toSet() ?? {};
+    final collection = ContentCollection.fromYoutube(payload, type: type).copyWith(
+      songIds: {
+        ...baseSongIds,
+        ...(additionalSongIds ?? {}),
+      },
+      artistIds: artistIds,
+      ownerId: ownerId,
+      mood: mood,
+    );
+    final songs = (payload['list'] as Iterable?)?.whereType<Map<String, dynamic>>().map((songPayload) {
+      return Song.fromYoutube(songPayload);
+    }).toList(growable: false);
+    return CollectionPersistenceResult(collection: collection, songs: songs ?? []);
+  }
+
+  @override
+  Future<Song?> getSongById(String id) async => null;
+
+  @override
+  Future<List<Song>> getSongsByIds(List<String> ids) async => [];
+
+  @override
+  Future<ContentCollection?> getCollectionById(String id) async => null;
+
+  @override
+  Future<List<ContentCollection>> getCollectionsByIds(List<String> ids) async => [];
+
+  @override
+  Future<Artist?> getArtistById(String id) async => null;
 }

@@ -1,4 +1,6 @@
+import '../models/media_models.dart';
 import '../services/mongo_service.dart';
+
 class HomeRepository {
   HomeRepository(this._mongo);
 
@@ -22,10 +24,8 @@ class HomeRepository {
     if (existing != null) return existing;
     final seeded = <String, dynamic>{
       '_id': _docId,
-      'artists': <Map<String, dynamic>>[],
-      'trending': <Map<String, dynamic>>[],
-      'featuredPlaylists': <Map<String, dynamic>>[],
-      'moodPlaylists': <Map<String, dynamic>>[],
+      'sections': <Map<String, dynamic>>[],
+      'previews': <String, Map<String, dynamic>>{},
       'status': {
         'artists': 0,
         'trending': 0,
@@ -36,5 +36,29 @@ class HomeRepository {
     };
     await saveDoc(seeded);
     return seeded;
+  }
+
+  Future<List<HomeSection>> getSections() async {
+    final doc = await getOrSeed();
+    final rawSections = List<Map<String, dynamic>>.from(doc['sections'] ?? []);
+    return rawSections.map(HomeSection.fromMap).toList();
+  }
+
+  Future<Map<String, Map<String, dynamic>>> getPreviews() async {
+    final doc = await getOrSeed();
+    final raw = Map<String, dynamic>.from(doc['previews'] ?? {});
+    return raw.map((key, value) => MapEntry(key, Map<String, dynamic>.from(value)));
+  }
+
+  Future<void> persistSections(
+    List<HomeSection> sections,
+    Map<String, Map<String, dynamic>> previews, {
+    Map<String, dynamic>? baseDoc,
+  }) async {
+    final doc = baseDoc ?? await getOrSeed();
+    doc['sections'] = sections.map((section) => section.toMap()).toList();
+    doc['previews'] = previews.map((key, value) => MapEntry(key, value));
+    doc['updatedAt'] = DateTime.now().toIso8601String();
+    await saveDoc(doc);
   }
 }
