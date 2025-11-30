@@ -27,6 +27,12 @@ class UserRepository {
 
   Map<String, dynamic> _emptyUser(String userId) => {
         '_id': userId,
+        'displayName': null,
+        'username': null,
+        'email': null,
+        'avatarUrl': null,
+        'phone': null,
+        'role': 'guest',
         'likedSongs': <Map<String, dynamic>>[],
         'likedPlaylists': <Map<String, dynamic>>[],
         'recentlyPlayed': <Map<String, dynamic>>[],
@@ -178,6 +184,60 @@ class UserRepository {
   ) async {
     final user = await getUser(userId);
     user['playlistFolders'] = folders;
+    return _save(userId, user);
+  }
+
+  Future<Map<String, dynamic>> register({
+    required String userId,
+    String? displayName,
+    String? username,
+    String? email,
+    String? avatarUrl,
+    String? role,
+    String? phone,
+  }) async {
+    final coll = await _mongo.collection(_collection);
+    final existing = await coll.findOne({'_id': userId});
+    final doc = existing != null ? Map<String, dynamic>.from(existing) : _emptyUser(userId);
+    doc['displayName'] = displayName ?? doc['displayName'];
+    doc['username'] = username ?? doc['username'];
+    doc['email'] = email ?? doc['email'];
+    doc['avatarUrl'] = avatarUrl ?? doc['avatarUrl'];
+    doc['phone'] = phone ?? doc['phone'];
+    doc['role'] = role ?? doc['role'] ?? 'user';
+    await coll.replaceOne({'_id': userId}, doc, upsert: true);
+    return doc;
+  }
+
+  Future<Map<String, dynamic>?> findByUsernameOrEmail({
+    String? username,
+    String? email,
+  }) async {
+    final coll = await _mongo.collection(_collection);
+    final query = <String, dynamic>{};
+    if (username != null) query['username'] = username;
+    if (email != null) query['email'] = email;
+    if (query.isEmpty) return null;
+    final doc = await coll.findOne(query);
+    return doc == null ? null : Map<String, dynamic>.from(doc);
+  }
+
+  Future<Map<String, dynamic>> updateProfile(
+    String userId, {
+    String? displayName,
+    String? username,
+    String? email,
+    String? avatarUrl,
+    String? role,
+    String? phone,
+  }) async {
+    final user = await getUser(userId);
+    if (displayName != null) user['displayName'] = displayName;
+    if (username != null) user['username'] = username;
+    if (email != null) user['email'] = email;
+    if (avatarUrl != null) user['avatarUrl'] = avatarUrl;
+    if (phone != null) user['phone'] = phone;
+    if (role != null) user['role'] = role;
     return _save(userId, user);
   }
 }

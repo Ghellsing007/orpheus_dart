@@ -525,6 +525,89 @@ class ApiRouter {
       return _json(shaped);
     });
 
+    router.post('/auth/register', (Request req) async {
+      final body = await _jsonBody(req);
+      final userId = (body['userId'] ?? body['id'])?.toString();
+      if (userId == null || userId.isEmpty) {
+        return _json({'error': 'userId required'}, status: 400);
+      }
+      final displayName = body['displayName']?.toString();
+      final username = body['username']?.toString();
+      final email = body['email']?.toString();
+      final avatarUrl = body['avatarUrl']?.toString();
+      final doc = await users.register(
+        userId: userId,
+        displayName: displayName,
+        username: username,
+        email: email,
+        avatarUrl: avatarUrl,
+        phone: body['phone']?.toString(),
+      );
+      return _json({
+        'userId': doc['_id'],
+        'displayName': doc['displayName'],
+        'username': doc['username'],
+        'email': doc['email'],
+        'avatarUrl': doc['avatarUrl'],
+        'phone': doc['phone'],
+        'role': doc['role'] ?? 'guest',
+      });
+    });
+
+    router.post('/auth/profile', (Request req) async {
+      final body = await _jsonBody(req);
+      final userId = (body['userId'] ?? body['id'])?.toString();
+      if (userId == null || userId.isEmpty) {
+        return _json({'error': 'userId required'}, status: 400);
+      }
+      final doc = await users.updateProfile(
+        userId,
+        displayName: body['displayName']?.toString(),
+        username: body['username']?.toString(),
+        email: body['email']?.toString(),
+        avatarUrl: body['avatarUrl']?.toString(),
+        role: body['role']?.toString(),
+        phone: body['phone']?.toString(),
+      );
+      return _json({
+        'userId': doc['_id'],
+        'displayName': doc['displayName'],
+        'username': doc['username'],
+        'email': doc['email'],
+        'avatarUrl': doc['avatarUrl'],
+        'phone': doc['phone'],
+        'role': doc['role'] ?? 'guest',
+      });
+    });
+
+    router.post('/auth/login', (Request req) async {
+      final body = await _jsonBody(req);
+      final userId = (body['userId'] ?? body['id'])?.toString();
+      final username = body['username']?.toString();
+      final email = body['email']?.toString();
+      if (userId == null && username == null && email == null) {
+        return _json({'error': 'userId or username/email required'}, status: 400);
+      }
+      Map<String, dynamic>? doc;
+      if (userId != null && userId.isNotEmpty) {
+        doc = await users.getUser(userId);
+      } else {
+        doc = await users.findByUsernameOrEmail(username: username, email: email);
+      }
+      if (doc == null) {
+        return _json({'error': 'User not found'}, status: 404);
+      }
+      return _json({
+        'userId': doc['_id'],
+        'displayName': doc['displayName'],
+        'username': doc['username'],
+        'email': doc['email'],
+        'avatarUrl': doc['avatarUrl'],
+        'phone': doc['phone'],
+        'role': doc['role'] ?? 'guest',
+      });
+    });
+
     router.post('/users/<userId>/likes/song', (
       Request req,
       String userId,
