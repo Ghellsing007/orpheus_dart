@@ -7,7 +7,7 @@ class UserRepository {
 
   final MongoService _mongo;
   static const _collection = 'users';
-  static const _recentLimit = 50;
+  static const recentLimit = 50;
   final _uuid = const Uuid();
 
   Future<Map<String, dynamic>> getUser(String userId) async {
@@ -75,8 +75,8 @@ class UserRepository {
     final recent = List<Map<String, dynamic>>.from(user['recentlyPlayed'] ?? []);
     recent.removeWhere((s) => s['ytid'] == song['ytid']);
     recent.insert(0, song);
-    if (recent.length > _recentLimit) {
-      recent.removeRange(_recentLimit, recent.length);
+    if (recent.length > recentLimit) {
+      recent.removeRange(recentLimit, recent.length);
     }
     user['recentlyPlayed'] = recent;
     return _save(userId, user);

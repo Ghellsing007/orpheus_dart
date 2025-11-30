@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 import 'package:shelf_cors_headers/shelf_cors_headers.dart';
+import 'package:shelf_gzip/shelf_gzip.dart';
 import 'package:shelf_swagger_ui/shelf_swagger_ui.dart';
 
 import 'package:orpheus_dart/config/env.dart';
@@ -58,6 +59,7 @@ void main(List<String> args) async {
 
   // Configure a pipeline that logs requests and enables CORS.
   final handler = Pipeline()
+      .addMiddleware(gzipMiddleware)
       .addMiddleware(logRequests())
       .addMiddleware(corsHeaders())
       .addHandler((request) {

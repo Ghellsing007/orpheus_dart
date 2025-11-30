@@ -11,6 +11,7 @@ dependencies:
   shelf_router: ^1.1.2
   shelf_cors_headers: ^0.1.5
   shelf_static: ^1.1.2
+  shelf_gzip: ^4.1.0
   shelf_swagger_ui: ^1.0.0+2
   http: ^1.2.2
   youtube_explode_dart: ^2.5.2

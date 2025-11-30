@@ -131,6 +131,41 @@ final _sectionConfig = [
   ['mood', 4, curatedMoodSeeds.length],
 ];
 
+Map<String, dynamic> buildResolvedHomePayload(
+  List<HomeSection> sections,
+  Map<String, Map<String, dynamic>> previews, {
+  int perSectionLimit = 40,
+}) {
+  final byType = {for (final section in sections) section.type: section};
+
+  List<Map<String, dynamic>> _mapItems(List<String> ids) {
+    return ids
+        .where(previews.containsKey)
+        .take(perSectionLimit)
+        .map((id) => Map<String, dynamic>.from(previews[id]!))
+        .toList();
+  }
+
+  final resolved = <String, dynamic>{};
+  final trending = byType[HomeSectionType.trendingSongs];
+  if (trending != null) {
+    resolved['trendingSongs'] = _mapItems(trending.itemIds);
+  }
+  final featured = byType[HomeSectionType.featuredPlaylists];
+  if (featured != null) {
+    resolved['featuredPlaylists'] = _mapItems(featured.collectionIds);
+  }
+  final mood = byType[HomeSectionType.moodPlaylists];
+  if (mood != null) {
+    resolved['moodPlaylists'] = _mapItems(mood.collectionIds);
+  }
+  final artists = byType[HomeSectionType.popularArtists];
+  if (artists != null) {
+    resolved['popularArtists'] = _mapItems(artists.itemIds);
+  }
+  return resolved;
+}
+
 /// Hydrates all sections and keeps a preview map to drive the frontend without extra calls.
 Future<Map<String, dynamic>> hydrateCuratedHome(
   YoutubeService youtube,
@@ -157,6 +192,7 @@ Future<Map<String, dynamic>> hydrateCuratedHome(
   return {
     'sections': sections.map((s) => s.toMap()).toList(),
     'previews': previews,
+    'resolved': buildResolvedHomePayload(sections, previews),
     'status': doc['status'] ?? {},
     'updatedAt': doc['updatedAt'],
   };
@@ -295,6 +331,7 @@ Future<Map<String, dynamic>> hydrateCuratedChunk(
   return {
     'sections': sections.map((s) => s.toMap()).toList(),
     'previews': previews,
+    'resolved': buildResolvedHomePayload(sections, previews),
     'status': status,
     'updatedAt': doc['updatedAt'],
   };

@@ -40,6 +40,10 @@ class ApiRouter {
   final HomeRepository home;
   final MediaRepositoryBase media;
 
+  static const _defaultPageSize = 20;
+  static const _maxPageSize = 50;
+  static const _maxIdsPerRequest = 50;
+
   Router build() {
     final router = Router();
 
@@ -52,6 +56,7 @@ class ApiRouter {
       final doc = await home.getOrSeed();
       final sections = await home.getSections();
       final previews = await home.getPreviews();
+      final resolved = buildResolvedHomePayload(sections, previews);
       // DEBUG: Log URLs being sent to frontend
       previews.forEach((key, value) {
         if (value is Map && value.containsKey('image')) {
@@ -61,8 +66,11 @@ class ApiRouter {
       return _json({
         'sections': sections.map((s) => s.toMap()).toList(),
         'previews': previews,
+        'resolved': resolved,
         'status': doc['status'] ?? {},
         'updatedAt': doc['updatedAt'],
+      }, headers: {
+        HttpHeaders.cacheControlHeader: 'public, max-age=300',
       });
     });
 
@@ -85,6 +93,7 @@ class ApiRouter {
       final ids = (idsParam ?? '')
           .split(',')
           .where((id) => id.isNotEmpty)
+          .take(_maxIdsPerRequest)
           .toList();
       final songs = await media.getSongsByIds(ids);
       return _json({'items': songs.map((song) => song.toMap()).toList()});
@@ -95,6 +104,7 @@ class ApiRouter {
       final ids = (idsParam ?? '')
           .split(',')
           .where((id) => id.isNotEmpty)
+          .take(_maxIdsPerRequest)
           .toList();
       final collections = await media.getCollectionsByIds(ids);
       return _json({
@@ -107,6 +117,7 @@ class ApiRouter {
       final ids = (idsParam ?? '')
           .split(',')
           .where((id) => id.isNotEmpty)
+          .take(_maxIdsPerRequest)
           .toList();
       final artists = <Artist>[];
       for (final id in ids) {
@@ -121,8 +132,17 @@ class ApiRouter {
       if (query == null || query.isEmpty) {
         return _json({'error': 'Missing q'}, status: 400);
       }
+      final limit = _parseLimit(req.requestedUri.queryParameters['limit']);
+      final page = _parsePage(req.requestedUri.queryParameters['page']);
+      final offset = (page - 1) * limit;
       final songs = await youtube.searchSongs(query);
-      return _json({'items': songs});
+      final sliced = songs.skip(offset).take(limit).toList();
+      return _json({
+        'items': sliced,
+        'page': page,
+        'limit': limit,
+        'hasNext': offset + limit < songs.length,
+      });
     });
 
     router.get('/suggestions', (Request req) async {
@@ -197,7 +217,7 @@ class ApiRouter {
     router.get('/channel/<id>/songs', (Request req, String id) async {
       final params = req.requestedUri.queryParameters;
       final limitParam = params['limit'];
-      final limit = int.tryParse(limitParam ?? '') ?? 30;
+      final limit = _parseLimit(limitParam, defaultValue: 30);
       final songs = await youtube.getChannelSongs(id, limit: limit);
       return _json({'items': songs});
     });
@@ -207,6 +227,9 @@ class ApiRouter {
       final query = params['query']?.toLowerCase();
       final type = params['type'] ?? 'all'; // all | album | playlist
       final includeOnline = params['online'] == 'true';
+      final limit = _parseLimit(params['limit']);
+      final page = _parsePage(params['page']);
+      final offset = (page - 1) * limit;
 
       final curated = [...playlistsDB, ...albumsDB];
 
@@ -238,7 +261,15 @@ class ApiRouter {
         } catch (_) {}
       }
 
-      return _json({'items': results});
+      final total = results.length;
+      final paged = results.skip(offset).take(limit).toList();
+      return _json({
+        'items': paged,
+        'page': page,
+        'limit': limit,
+        'total': total,
+        'hasNext': offset + limit < total,
+      });
     });
 
     router.get('/playlists/<id>', (Request req, String id) async {
@@ -438,12 +469,13 @@ class ApiRouter {
 
     router.get('/recommendations', (Request req) async {
       final userId = req.requestedUri.queryParameters['userId'];
+      final limit = _parseLimit(req.requestedUri.queryParameters['limit'], defaultValue: 15);
       if (userId != null) {
         final recs = await recommendations.recommendations(
           userId,
           defaultRecommendations: true,
         );
-        return _json({'items': recs});
+        return _json({'items': recs.take(limit).toList()});
       }
       // fallback global playlist
       final songs = await youtube.getPlaylistSongs(
@@ -457,12 +489,40 @@ class ApiRouter {
           );
         }),
       );
-      return _json({'items': persisted.map((song) => song.toMap()).toList()});
+      return _json({
+        'items': persisted.take(limit).map((song) => song.toMap()).toList(),
+      });
     });
 
     router.get('/users/<userId>/state', (Request req, String userId) async {
       final user = await users.getUser(userId);
-      return _json(user);
+      final recentLimit = _parseLimit(
+        req.requestedUri.queryParameters['recentLimit'],
+        defaultValue: UserRepository.recentLimit,
+        maxValue: UserRepository.recentLimit,
+      );
+      final likedLimit = _parseLimit(
+        req.requestedUri.queryParameters['likedLimit'],
+        defaultValue: user['likedSongs']?.length ?? _defaultPageSize,
+      );
+      final playlistLimit = _parseLimit(
+        req.requestedUri.queryParameters['playlistLimit'],
+        defaultValue: user['likedPlaylists']?.length ?? _defaultPageSize,
+      );
+      final shaped = Map<String, dynamic>.from(user);
+      shaped['likedSongs'] =
+          List<Map<String, dynamic>>.from(shaped['likedSongs'] ?? [])
+              .take(likedLimit)
+              .toList();
+      shaped['likedPlaylists'] =
+          List<Map<String, dynamic>>.from(shaped['likedPlaylists'] ?? [])
+              .take(playlistLimit)
+              .toList();
+      shaped['recentlyPlayed'] =
+          List<Map<String, dynamic>>.from(shaped['recentlyPlayed'] ?? [])
+              .take(recentLimit)
+              .toList();
+      return _json(shaped);
     });
 
     router.post('/users/<userId>/likes/song', (
@@ -567,11 +627,14 @@ class ApiRouter {
     return router;
   }
 
-  Response _json(Object? data, {int status = 200}) {
+  Response _json(Object? data, {int status = 200, Map<String, String>? headers}) {
     return Response(
       status,
       body: jsonEncode(data),
-      headers: {HttpHeaders.contentTypeHeader: 'application/json'},
+      headers: {
+        HttpHeaders.contentTypeHeader: 'application/json',
+        ...?headers,
+      },
     );
   }
 
@@ -586,5 +649,19 @@ class ApiRouter {
     } catch (_) {
       return {};
     }
+  }
+
+  int _parseLimit(
+    String? raw, {
+    int defaultValue = _defaultPageSize,
+    int maxValue = _maxPageSize,
+  }) {
+    final parsed = int.tryParse(raw ?? '') ?? defaultValue;
+    return parsed.clamp(1, maxValue);
+  }
+
+  int _parsePage(String? raw) {
+    final parsed = int.tryParse(raw ?? '') ?? 1;
+    return parsed < 1 ? 1 : parsed;
   }
 }

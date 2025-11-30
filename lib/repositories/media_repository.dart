@@ -251,9 +251,11 @@ class MediaRepository implements MediaRepositoryBase {
     final cursor = coll.find({
       '_id': {'\$in': ids},
     });
-    return await cursor
+    final fetched = await cursor
         .map((doc) => Song.fromMap(Map<String, dynamic>.from(doc)))
         .toList();
+    final byId = {for (final song in fetched) song.ytid: song};
+    return ids.map((id) => byId[id]).whereType<Song>().toList();
   }
 
   @override
@@ -272,9 +274,11 @@ class MediaRepository implements MediaRepositoryBase {
     final cursor = coll.find({
       '_id': {'\$in': ids},
     });
-    return await cursor
+    final fetched = await cursor
         .map((doc) => ContentCollection.fromMap(Map<String, dynamic>.from(doc)))
         .toList();
+    final byId = {for (final collection in fetched) collection.ytid: collection};
+    return ids.map((id) => byId[id]).whereType<ContentCollection>().toList();
   }
 
   @override
