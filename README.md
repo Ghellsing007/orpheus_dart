@@ -9,8 +9,13 @@ Backend Dart (Shelf) que replica la lógica clave de Musify móvil: búsqueda y 
    ```
    PORT=8080
    MONGO_URI=mongodb+srv://root:root@cluster0.pfs0rzo.mongodb.net/orpheus-backend-v1?retryWrites=true&w=majority&appName=Cluster0
-   PROXY_URL=         # opcional, host:port para usar proxy
-   STREAM_MODE=redirect   # redirect | proxy | url
+   PROXY_URL=               # opcional, host:port para usar proxy
+   STREAM_MODE=redirect     # redirect | proxy | url
+   USE_YTDLP=true           # usa yt-dlp para resolver URLs antes de ffmpeg
+   DOWNLOAD_TIMEOUT_SEC=240 # mata ffmpeg/yt-dlp si se cuelga
+   DOWNLOAD_MAX_CONCURRENT=3
+   # YTDLP_PATH=yt-dlp
+   # YTDLP_USER_AGENT=Mozilla/5.0 (Linux; Android 10)
    ```
 2. Instala dependencias:
    ```
@@ -49,3 +54,4 @@ Backend Dart (Shelf) que replica la lógica clave de Musify móvil: búsqueda y 
 - Modo `redirect` devuelve 302 a la URL de audio de YouTube (ligero).
 - Modo `proxy` intenta retransmitir desde el backend (más costo).
 - Las URLs se cachean por calidad y por modo (directo/proxy) para evitar caducidad.
+- Descarga MP3: `GET /download/mp3/{id}` usa yt-dlp (si está habilitado) o youtube_explode_dart para resolver la URL y ffmpeg para transcodificar a 192 kbps; incluye `Content-Disposition` para forzar descarga.

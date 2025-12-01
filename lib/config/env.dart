@@ -9,6 +9,11 @@ class AppConfig {
     this.proxyUrl,
     this.streamMode,
     this.proxyPoolEnabled,
+    this.useYtDlp,
+    this.ytDlpPath,
+    this.downloadTimeoutSec,
+    this.downloadMaxConcurrent,
+    this.ytDlpUserAgent,
   );
 
   final int port;
@@ -16,6 +21,11 @@ class AppConfig {
   final String? proxyUrl;
   final String streamMode; // redirect | proxy | url
   final bool proxyPoolEnabled;
+  final bool useYtDlp;
+  final String ytDlpPath;
+  final int downloadTimeoutSec;
+  final int downloadMaxConcurrent;
+  final String? ytDlpUserAgent;
 
   factory AppConfig.manual({
     required int port,
@@ -23,8 +33,23 @@ class AppConfig {
     String? proxyUrl,
     String streamMode = 'redirect',
     bool proxyPoolEnabled = true,
-  }) =>
-      AppConfig._(port, mongoUri, proxyUrl, streamMode, proxyPoolEnabled);
+    bool useYtDlp = true,
+    String ytDlpPath = 'yt-dlp',
+    int downloadTimeoutSec = 240,
+    int downloadMaxConcurrent = 3,
+    String? ytDlpUserAgent,
+  }) => AppConfig._(
+    port,
+    mongoUri,
+    proxyUrl,
+    streamMode,
+    proxyPoolEnabled,
+    useYtDlp,
+    ytDlpPath,
+    downloadTimeoutSec,
+    downloadMaxConcurrent,
+    ytDlpUserAgent,
+  );
 
   static AppConfig load() {
     final dotEnv = DotEnv(includePlatformEnvironment: true);
@@ -47,6 +72,13 @@ class AppConfig {
     final streamMode = (envOrDot('STREAM_MODE') ?? 'redirect').toLowerCase();
     final proxyPoolEnabled =
         (envOrDot('PROXY_POOL_ENABLED') ?? 'true').toLowerCase() == 'true';
+    final useYtDlp = (envOrDot('USE_YTDLP') ?? 'true').toLowerCase() == 'true';
+    final ytDlpPath = envOrDot('YTDLP_PATH')?.trim();
+    final downloadTimeoutSec =
+        int.tryParse(envOrDot('DOWNLOAD_TIMEOUT_SEC') ?? '') ?? 240;
+    final downloadMaxConcurrent =
+        int.tryParse(envOrDot('DOWNLOAD_MAX_CONCURRENT') ?? '') ?? 3;
+    final ytDlpUserAgent = envOrDot('YTDLP_USER_AGENT');
 
     return AppConfig._(
       port,
@@ -54,6 +86,11 @@ class AppConfig {
       proxyUrl?.isEmpty == true ? null : proxyUrl,
       streamMode,
       proxyPoolEnabled,
+      useYtDlp,
+      (ytDlpPath == null || ytDlpPath.isEmpty) ? 'yt-dlp' : ytDlpPath,
+      downloadTimeoutSec,
+      downloadMaxConcurrent,
+      ytDlpUserAgent?.isEmpty == true ? null : ytDlpUserAgent,
     );
   }
 }

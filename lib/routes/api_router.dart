@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -43,6 +44,9 @@ class ApiRouter {
   static const _defaultPageSize = 20;
   static const _maxPageSize = 50;
   static const _maxIdsPerRequest = 50;
+  static int _activeDownloads = 0;
+  static const _defaultYtDlpUserAgent =
+      'Mozilla/5.0 (Linux; Android 10; Pixel 3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36';
 
   Router build() {
     final router = Router();
@@ -63,15 +67,16 @@ class ApiRouter {
           print('DEBUG: Preview $key image URL: ${value['image']}');
         }
       });
-      return _json({
-        'sections': sections.map((s) => s.toMap()).toList(),
-        'previews': previews,
-        'resolved': resolved,
-        'status': doc['status'] ?? {},
-        'updatedAt': doc['updatedAt'],
-      }, headers: {
-        HttpHeaders.cacheControlHeader: 'public, max-age=300',
-      });
+      return _json(
+        {
+          'sections': sections.map((s) => s.toMap()).toList(),
+          'previews': previews,
+          'resolved': resolved,
+          'status': doc['status'] ?? {},
+          'updatedAt': doc['updatedAt'],
+        },
+        headers: {HttpHeaders.cacheControlHeader: 'public, max-age=300'},
+      );
     });
 
     router.post('/home/curated/refresh', (Request req) async {
@@ -198,7 +203,9 @@ class ApiRouter {
 
       try {
         String channelId = decodedId;
-        final looksLikeId = RegExp(r'^UC[0-9A-Za-z_-]{20,}$').hasMatch(decodedId);
+        final looksLikeId = RegExp(
+          r'^UC[0-9A-Za-z_-]{20,}$',
+        ).hasMatch(decodedId);
         if (!looksLikeId) {
           final found = await youtube.searchChannels(decodedId);
           if (found.isNotEmpty) {
@@ -285,7 +292,9 @@ class ApiRouter {
           type: CollectionType.playlist,
         );
         // persistCollectionFromYoutube already writes the playlist doc; retrieve to ensure we return the DB shape
-        final refreshed = await media.getDbPlaylistById(persisted.collection.ytid);
+        final refreshed = await media.getDbPlaylistById(
+          persisted.collection.ytid,
+        );
         if (refreshed != null) return _json(refreshed);
       } catch (err) {
         print('Error fetching playlist $id from YouTube: $err');
@@ -310,91 +319,10 @@ class ApiRouter {
 
     // Transcoded MP3 download
     router.get('/download/mp3/<id>', (Request req, String id) async {
-      try {
-        Map<String, dynamic>? details;
-        bool isLive = false;
-        try {
-          details = await youtube.getSongDetails(id);
-          isLive = details['isLive'] == true;
-        } on VideoUnavailableException {
-          details = null;
-          isLive = false;
-        }
-
-        String? url;
-        try {
-          url = await youtube.getSongUrl(
-            id,
-            isLive: isLive,
-            quality: 'high',
-            useProxy: false,
-          );
-        } on VideoUnavailableException {
-          url = null;
-        }
-
-        // Fallback con proxy si está habilitado
-        if (url == null && youtube.proxyPoolEnabled) {
-          try {
-            url = await youtube.getSongUrl(
-              id,
-              isLive: isLive,
-              quality: 'high',
-              useProxy: true,
-            );
-          } catch (_) {
-            url = null;
-          }
-        }
-        if (url == null)
-          return _json({'error': 'Stream not available'}, status: 404);
-
-        Process process;
-        try {
-          process = await Process.start('ffmpeg', [
-            '-hide_banner',
-            '-loglevel',
-            'error',
-            '-i',
-            url,
-            '-vn',
-            '-acodec',
-            'libmp3lame',
-            '-b:a',
-            '192k',
-            '-f',
-            'mp3',
-            'pipe:1',
-          ]);
-        } on ProcessException catch (err) {
-          print('ffmpeg not available: $err');
-          return _json({
-            'error': 'ffmpeg not available on server',
-          }, status: 500);
-        }
-
-        // Construye filenames seguros: ASCII (fallback) + UTF-8 (RFC 5987) para navegadores.
-        final baseName =
-            '${details?['artist'] ?? 'audio'} - ${details?['title'] ?? id}.mp3';
-        final asciiClean = id.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-        final asciiFallback = asciiClean.isNotEmpty ? asciiClean : 'audio';
-        final filenameAscii = '$asciiFallback.mp3';
-        final filenameUtf8 = Uri.encodeComponent(baseName);
-
-        return Response.ok(
-          process.stdout,
-          headers: {
-            HttpHeaders.contentTypeHeader: 'audio/mpeg',
-            // ASCII-only fallback + UTF-8 extended filename.
-            'content-disposition':
-                'attachment; filename="$filenameAscii"; filename*=UTF-8\'\'$filenameUtf8',
-          },
-        );
-      } catch (err, stack) {
-        print('Download mp3 error for $id: $err');
-        print(stack);
-        return _json({'error': 'Download not available'}, status: 502);
+      if (_activeDownloads >= config.downloadMaxConcurrent) {
+        return _json({'error': 'Too many downloads in progress'}, status: 503);
       }
+      return _handleMp3Download(id);
     });
 
     router.get('/songs/<id>/stream', (Request req, String id) async {
@@ -469,7 +397,10 @@ class ApiRouter {
 
     router.get('/recommendations', (Request req) async {
       final userId = req.requestedUri.queryParameters['userId'];
-      final limit = _parseLimit(req.requestedUri.queryParameters['limit'], defaultValue: 15);
+      final limit = _parseLimit(
+        req.requestedUri.queryParameters['limit'],
+        defaultValue: 15,
+      );
       if (userId != null) {
         final recs = await recommendations.recommendations(
           userId,
@@ -514,22 +445,18 @@ class ApiRouter {
         defaultValue: user['likedArtists']?.length ?? _defaultPageSize,
       );
       final shaped = Map<String, dynamic>.from(user);
-      shaped['likedSongs'] =
-          List<Map<String, dynamic>>.from(shaped['likedSongs'] ?? [])
-              .take(likedLimit)
-              .toList();
-      shaped['likedPlaylists'] =
-          List<Map<String, dynamic>>.from(shaped['likedPlaylists'] ?? [])
-              .take(playlistLimit)
-              .toList();
-      shaped['likedArtists'] =
-          List<Map<String, dynamic>>.from(shaped['likedArtists'] ?? [])
-              .take(artistLimit)
-              .toList();
-      shaped['recentlyPlayed'] =
-          List<Map<String, dynamic>>.from(shaped['recentlyPlayed'] ?? [])
-              .take(recentLimit)
-              .toList();
+      shaped['likedSongs'] = List<Map<String, dynamic>>.from(
+        shaped['likedSongs'] ?? [],
+      ).take(likedLimit).toList();
+      shaped['likedPlaylists'] = List<Map<String, dynamic>>.from(
+        shaped['likedPlaylists'] ?? [],
+      ).take(playlistLimit).toList();
+      shaped['likedArtists'] = List<Map<String, dynamic>>.from(
+        shaped['likedArtists'] ?? [],
+      ).take(artistLimit).toList();
+      shaped['recentlyPlayed'] = List<Map<String, dynamic>>.from(
+        shaped['recentlyPlayed'] ?? [],
+      ).take(recentLimit).toList();
       return _json(shaped);
     });
 
@@ -594,13 +521,18 @@ class ApiRouter {
       final username = body['username']?.toString();
       final email = body['email']?.toString();
       if (userId == null && username == null && email == null) {
-        return _json({'error': 'userId or username/email required'}, status: 400);
+        return _json({
+          'error': 'userId or username/email required',
+        }, status: 400);
       }
       Map<String, dynamic>? doc;
       if (userId != null && userId.isNotEmpty) {
         doc = await users.getUser(userId);
       } else {
-        doc = await users.findByUsernameOrEmail(username: username, email: email);
+        doc = await users.findByUsernameOrEmail(
+          username: username,
+          email: email,
+        );
       }
       if (doc == null) {
         return _json({'error': 'User not found'}, status: 404);
@@ -736,14 +668,204 @@ class ApiRouter {
     return router;
   }
 
-  Response _json(Object? data, {int status = 200, Map<String, String>? headers}) {
+  Future<Response> _handleMp3Download(String id) async {
+    _activeDownloads++;
+    var releasePlanned = false;
+    var released = false;
+
+    void release() {
+      if (!released && _activeDownloads > 0) {
+        _activeDownloads--;
+        released = true;
+      }
+    }
+
+    void releaseWhenProcessEnds(Process process) {
+      releasePlanned = true;
+      process.exitCode.whenComplete((_) => release());
+    }
+
+    try {
+      Map<String, dynamic>? details;
+      bool isLive = false;
+      bool usedYtDlp = false;
+      try {
+        details = await youtube.getSongDetails(id);
+        isLive = details['isLive'] == true;
+      } on VideoUnavailableException {
+        details = null;
+        isLive = false;
+      }
+
+      String? url;
+      if (config.useYtDlp) {
+        url = await _getYtDlpAudioUrl(id);
+        usedYtDlp = url != null;
+      }
+
+      if (url == null) {
+        try {
+          url = await youtube.getSongUrl(
+            id,
+            isLive: isLive,
+            quality: 'high',
+            useProxy: false,
+          );
+        } on VideoUnavailableException {
+          url = null;
+        }
+      }
+
+      // Fallback con proxy si está habilitado
+      if (url == null && youtube.proxyPoolEnabled) {
+        try {
+          url = await youtube.getSongUrl(
+            id,
+            isLive: isLive,
+            quality: 'high',
+            useProxy: true,
+          );
+        } catch (_) {
+          url = null;
+        }
+      }
+      if (url == null) {
+        return _json({'error': 'Stream not available'}, status: 404);
+      }
+
+      Process process;
+      try {
+        process = await Process.start('ffmpeg', [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-i',
+          url,
+          '-vn',
+          '-acodec',
+          'libmp3lame',
+          '-b:a',
+          '192k',
+          '-f',
+          'mp3',
+          'pipe:1',
+        ]);
+        releaseWhenProcessEnds(process);
+      } on ProcessException catch (err) {
+        print('ffmpeg not available: $err');
+        release();
+        return _json({'error': 'ffmpeg not available on server'}, status: 500);
+      }
+
+      // Mata ffmpeg si se queda colgado más del timeout configurado.
+      final killTimer = Timer(Duration(seconds: config.downloadTimeoutSec), () {
+        process.kill();
+      });
+      process.exitCode.then((_) => killTimer.cancel());
+      process.stderr.transform(utf8.decoder).listen((data) {
+        final text = data.trim();
+        if (text.isNotEmpty) {
+          print('ffmpeg stderr for $id: $text');
+        }
+      });
+
+      // Construye filenames seguros: ASCII (fallback) + UTF-8 (RFC 5987) para navegadores.
+      final baseName =
+          '${details?['artist'] ?? 'audio'} - ${details?['title'] ?? id}.mp3';
+      final asciiClean = id.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final asciiFallback = asciiClean.isNotEmpty ? asciiClean : 'audio';
+      final filenameAscii = '$asciiFallback.mp3';
+      final filenameUtf8 = Uri.encodeComponent(baseName);
+
+      return Response.ok(
+        process.stdout,
+        headers: {
+          HttpHeaders.contentTypeHeader: 'audio/mpeg',
+          // ASCII-only fallback + UTF-8 extended filename.
+          'content-disposition':
+              'attachment; filename="$filenameAscii"; filename*=UTF-8\'\'$filenameUtf8',
+          'x-download-source': usedYtDlp ? 'ytdlp' : 'youtube_explode',
+        },
+      );
+    } catch (err, stack) {
+      print('Download mp3 error for $id: $err');
+      print(stack);
+      return _json({'error': 'Download not available'}, status: 502);
+    } finally {
+      if (!releasePlanned) {
+        release();
+      }
+    }
+  }
+
+  Future<String?> _getYtDlpAudioUrl(String id) async {
+    final args = <String>[
+      '--no-playlist',
+      '--no-warnings',
+      '--ignore-config',
+      '--no-call-home',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '--format',
+      'bestaudio/best',
+      '--get-url',
+      'https://www.youtube.com/watch?v=$id',
+      '--user-agent',
+      config.ytDlpUserAgent ?? _defaultYtDlpUserAgent,
+    ];
+
+    if (config.proxyUrl != null && config.proxyUrl!.isNotEmpty) {
+      args.insertAll(0, ['--proxy', config.proxyUrl!]);
+    }
+
+    try {
+      final process = await Process.start(config.ytDlpPath, args);
+      final killTimer = Timer(Duration(seconds: config.downloadTimeoutSec), () {
+        process.kill();
+      });
+
+      final stdoutBuffer = StringBuffer();
+      final stderrBuffer = StringBuffer();
+      process.stdout.transform(utf8.decoder).listen(stdoutBuffer.write);
+      process.stderr.transform(utf8.decoder).listen(stderrBuffer.write);
+      final exitCode = await process.exitCode;
+      killTimer.cancel();
+
+      if (exitCode != 0) {
+        final stderrText = stderrBuffer.toString().trim();
+        if (stderrText.isNotEmpty) {
+          print('yt-dlp failed for $id (exit $exitCode): $stderrText');
+        }
+        return null;
+      }
+
+      final output = stdoutBuffer.toString().trim();
+      if (output.isEmpty) return null;
+      final lines = output
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
+      if (lines.isEmpty) return null;
+      return lines.last;
+    } on ProcessException catch (err) {
+      print('yt-dlp not available for $id: $err');
+      return null;
+    } catch (err) {
+      print('yt-dlp unexpected error for $id: $err');
+      return null;
+    }
+  }
+
+  Response _json(
+    Object? data, {
+    int status = 200,
+    Map<String, String>? headers,
+  }) {
     return Response(
       status,
       body: jsonEncode(data),
-      headers: {
-        HttpHeaders.contentTypeHeader: 'application/json',
-        ...?headers,
-      },
+      headers: {HttpHeaders.contentTypeHeader: 'application/json', ...?headers},
     );
   }
 
