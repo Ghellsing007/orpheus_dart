@@ -165,6 +165,7 @@ class Song {
       'ytid': ytid,
       'title': title,
       'artist': artistName,
+      if (artistId != null) 'artistId': artistId,
       'thumbnail': thumb,
       'image': thumb,
       'duration': durationSec,
