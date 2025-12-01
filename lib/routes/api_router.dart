@@ -682,7 +682,7 @@ class ApiRouter {
 
     void releaseWhenProcessEnds(Process process) {
       releasePlanned = true;
-      process.exitCode.whenComplete((_) => release());
+      process.exitCode.whenComplete(release);
     }
 
     try {
