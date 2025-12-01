@@ -33,8 +33,9 @@ ENV PORT=${PORT} \
 
 # Dependencias mínimas + ffmpeg + yt-dlp para descargas MP3
 RUN apt-get update \
-    && apt-get install -y ca-certificates ffmpeg python3 python3-pip \
-    && pip3 install --no-cache-dir "yt-dlp==2024.11.18" \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg curl python3 \
+    && curl -L "https://github.com/yt-dlp/yt-dlp/releases/download/2024.11.18/yt-dlp" -o /usr/local/bin/yt-dlp \
+    && chmod +x /usr/local/bin/yt-dlp \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/bin/server /app/bin/
