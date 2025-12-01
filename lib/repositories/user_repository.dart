@@ -221,7 +221,7 @@ class UserRepository {
     doc['email'] = email ?? doc['email'];
     doc['avatarUrl'] = avatarUrl ?? doc['avatarUrl'];
     doc['phone'] = phone ?? doc['phone'];
-    doc['role'] = role ?? doc['role'] ?? 'user';
+    doc['role'] = role ?? 'user';
     await coll.replaceOne({'_id': userId}, doc, upsert: true);
     return doc;
   }
