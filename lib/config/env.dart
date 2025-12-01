@@ -14,6 +14,7 @@ class AppConfig {
     this.downloadTimeoutSec,
     this.downloadMaxConcurrent,
     this.ytDlpUserAgent,
+    this.ytDlpCookiesPath,
   );
 
   final int port;
@@ -26,6 +27,7 @@ class AppConfig {
   final int downloadTimeoutSec;
   final int downloadMaxConcurrent;
   final String? ytDlpUserAgent;
+  final String? ytDlpCookiesPath;
 
   factory AppConfig.manual({
     required int port,
@@ -38,18 +40,21 @@ class AppConfig {
     int downloadTimeoutSec = 240,
     int downloadMaxConcurrent = 3,
     String? ytDlpUserAgent,
-  }) => AppConfig._(
-    port,
-    mongoUri,
-    proxyUrl,
-    streamMode,
-    proxyPoolEnabled,
-    useYtDlp,
-    ytDlpPath,
-    downloadTimeoutSec,
-    downloadMaxConcurrent,
-    ytDlpUserAgent,
-  );
+    String? ytDlpCookiesPath,
+  }) =>
+      AppConfig._(
+        port,
+        mongoUri,
+        proxyUrl,
+        streamMode,
+        proxyPoolEnabled,
+        useYtDlp,
+        ytDlpPath,
+        downloadTimeoutSec,
+        downloadMaxConcurrent,
+        ytDlpUserAgent,
+        ytDlpCookiesPath,
+      );
 
   static AppConfig load() {
     final dotEnv = DotEnv(includePlatformEnvironment: true);
@@ -79,6 +84,7 @@ class AppConfig {
     final downloadMaxConcurrent =
         int.tryParse(envOrDot('DOWNLOAD_MAX_CONCURRENT') ?? '') ?? 3;
     final ytDlpUserAgent = envOrDot('YTDLP_USER_AGENT');
+    final ytDlpCookiesPath = envOrDot('YTDLP_COOKIES_PATH');
 
     return AppConfig._(
       port,
@@ -91,6 +97,7 @@ class AppConfig {
       downloadTimeoutSec,
       downloadMaxConcurrent,
       ytDlpUserAgent?.isEmpty == true ? null : ytDlpUserAgent,
+      ytDlpCookiesPath?.isEmpty == true ? null : ytDlpCookiesPath,
     );
   }
 }

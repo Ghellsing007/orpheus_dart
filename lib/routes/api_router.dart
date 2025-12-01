@@ -319,10 +319,11 @@ class ApiRouter {
 
     // Transcoded MP3 download
     router.get('/download/mp3/<id>', (Request req, String id) async {
+      final forceProxy = req.requestedUri.queryParameters['proxy'] == 'true';
       if (_activeDownloads >= config.downloadMaxConcurrent) {
         return _json({'error': 'Too many downloads in progress'}, status: 503);
       }
-      return _handleMp3Download(id);
+      return _handleMp3Download(id, forceProxy: forceProxy);
     });
 
     router.get('/songs/<id>/stream', (Request req, String id) async {
@@ -668,7 +669,10 @@ class ApiRouter {
     return router;
   }
 
-  Future<Response> _handleMp3Download(String id) async {
+  Future<Response> _handleMp3Download(
+    String id, {
+    bool forceProxy = false,
+  }) async {
     _activeDownloads++;
     var releasePlanned = false;
     var released = false;
@@ -699,7 +703,7 @@ class ApiRouter {
 
       String? url;
       if (config.useYtDlp) {
-        url = await _getYtDlpAudioUrl(id);
+        url = await _getYtDlpAudioUrl(id, forceProxy: forceProxy);
         usedYtDlp = url != null;
       }
 
@@ -709,7 +713,7 @@ class ApiRouter {
             id,
             isLive: isLive,
             quality: 'high',
-            useProxy: false,
+            useProxy: forceProxy,
           );
         } on VideoUnavailableException {
           url = null;
@@ -798,13 +802,20 @@ class ApiRouter {
     }
   }
 
-  Future<String?> _getYtDlpAudioUrl(String id) async {
+  Future<String?> _getYtDlpAudioUrl(
+    String id, {
+    bool forceProxy = false,
+  }) async {
     final args = <String>[
       '--no-playlist',
       '--no-warnings',
       '--ignore-config',
       '--no-call-home',
       '--geo-bypass',
+      '--geo-bypass-country=US',
+      '--force-ipv4',
+      '--retries=2',
+      '--socket-timeout=15',
       '--no-check-certificates',
       '--format',
       'bestaudio/best',
@@ -814,8 +825,15 @@ class ApiRouter {
       config.ytDlpUserAgent ?? _defaultYtDlpUserAgent,
     ];
 
-    if (config.proxyUrl != null && config.proxyUrl!.isNotEmpty) {
+    if (config.proxyUrl != null &&
+        config.proxyUrl!.isNotEmpty &&
+        (forceProxy || config.proxyUrl!.isNotEmpty)) {
       args.insertAll(0, ['--proxy', config.proxyUrl!]);
+    }
+
+    if (config.ytDlpCookiesPath != null &&
+        config.ytDlpCookiesPath!.isNotEmpty) {
+      args.addAll(['--cookies', config.ytDlpCookiesPath!]);
     }
 
     try {
