@@ -1,5 +1,5 @@
-# Use Dart 3.9.x to match pubspec SDK constraint.
-FROM dart:3.9 AS build
+# Use Dart stable to match pubspec SDK constraint.
+FROM dart:stable AS build
 
 # Resolve app dependencies.
 WORKDIR /app
@@ -13,7 +13,7 @@ COPY openapi.yaml /app/openapi.yaml
 RUN dart compile exe bin/server.dart -o bin/server
 
 # Imagen de runtime basada en Dart con ffmpeg + yt-dlp instalados.
-FROM dart:3.9 AS runtime
+FROM dart:stable AS runtime
 
 # Environment defaults (override at runtime with -e).
 ARG PORT=8080
