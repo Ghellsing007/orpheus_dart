@@ -9,14 +9,16 @@ class HomeRepository {
   static const _docId = 'home';
 
   Future<Map<String, dynamic>?> getDoc() async {
-    final coll = await _mongo.collection(_collection);
-    final doc = await coll.findOne({'_id': _docId});
-    return doc == null ? null : Map<String, dynamic>.from(doc);
+    return _mongo.dbOperation((coll) async {
+      final doc = await coll.findOne({'_id': _docId});
+      return doc == null ? null : Map<String, dynamic>.from(doc);
+    }, collectionName: _collection);
   }
 
   Future<void> saveDoc(Map<String, dynamic> doc) async {
-    final coll = await _mongo.collection(_collection);
-    await coll.replaceOne({'_id': _docId}, doc, upsert: true);
+    await _mongo.dbOperation((coll) async {
+      await coll.replaceOne({'_id': _docId}, doc, upsert: true);
+    }, collectionName: _collection);
   }
 
   Future<Map<String, dynamic>> getOrSeed() async {

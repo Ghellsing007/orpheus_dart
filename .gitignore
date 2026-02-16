@@ -3,7 +3,8 @@
 .dart_tool/
 
 # Environment files
-
+.env
+.env.*
 
 # Build & logs
 build/

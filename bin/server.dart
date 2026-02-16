@@ -28,6 +28,13 @@ void main(List<String> args) async {
   }
 
   final mongo = MongoService(config.mongoUri);
+  
+  try {
+    await mongo.connect();
+  } catch (e) {
+    print('FATAL: Could not connect to MongoDB. Exiting.');
+    exit(1);
+  }
   final youtube = YoutubeService(
     proxyUrl: config.proxyUrl,
     proxyPoolEnabled: config.proxyPoolEnabled,

@@ -73,6 +73,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.3"
+  cached_annotation:
+    dependency: transitive
+    description:
+      name: cached_annotation
+      sha256: c26b54b21806c0e3771e23a6ae6afce71b1d4dc9764ea82e8ddfa4f00b8ae4b1
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.8.1"
   cli_config:
     dependency: transitive
     description:
@@ -313,6 +321,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.2"
+  mongo_pool:
+    dependency: "direct main"
+    description:
+      name: mongo_pool
+      sha256: b526a89bce6844fadb4991afcb637c643864b82d96f7db7db4ee0e6c12ba1259
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.5.0"
   node_preamble:
     dependency: transitive
     description:
@@ -601,6 +617,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.5.2"
+  very_good_analysis:
+    dependency: transitive
+    description:
+      name: very_good_analysis
+      sha256: e479fbc0941009262343db308133e121bf8660c2c81d48dd8e952df7b7e1e382
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.0.0"
   vm_service:
     dependency: transitive
     description:

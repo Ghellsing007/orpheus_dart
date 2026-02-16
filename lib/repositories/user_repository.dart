@@ -11,18 +11,23 @@ class UserRepository {
   final _uuid = const Uuid();
 
   Future<Map<String, dynamic>> getUser(String userId) async {
-    final coll = await _mongo.collection(_collection);
-    final existing = await coll.findOne({'_id': userId});
-    if (existing != null) return Map<String, dynamic>.from(existing);
-    final doc = _emptyUser(userId);
-    await coll.insert(doc);
-    return doc;
+    return _mongo.dbOperation((coll) async {
+      final existing = await coll.findOne({'_id': userId});
+      if (existing != null) return Map<String, dynamic>.from(existing);
+      final doc = _emptyUser(userId);
+      await coll.insert(doc);
+      return doc;
+    }, collectionName: _collection);
   }
 
-  Future<Map<String, dynamic>> _save(String userId, Map<String, dynamic> doc) async {
-    final coll = await _mongo.collection(_collection);
-    await coll.replaceOne({'_id': userId}, doc, upsert: true);
-    return doc;
+  Future<Map<String, dynamic>> _save(
+    String userId,
+    Map<String, dynamic> doc,
+  ) async {
+    return _mongo.dbOperation((coll) async {
+      await coll.replaceOne({'_id': userId}, doc, upsert: true);
+      return doc;
+    }, collectionName: _collection);
   }
 
   Map<String, dynamic> _emptyUser(String userId) => {
@@ -213,30 +218,35 @@ class UserRepository {
     String? role,
     String? phone,
   }) async {
-    final coll = await _mongo.collection(_collection);
-    final existing = await coll.findOne({'_id': userId});
-    final doc = existing != null ? Map<String, dynamic>.from(existing) : _emptyUser(userId);
-    doc['displayName'] = displayName ?? doc['displayName'];
-    doc['username'] = username ?? doc['username'];
-    doc['email'] = email ?? doc['email'];
-    doc['avatarUrl'] = avatarUrl ?? doc['avatarUrl'];
-    doc['phone'] = phone ?? doc['phone'];
-    doc['role'] = role ?? 'user';
-    await coll.replaceOne({'_id': userId}, doc, upsert: true);
-    return doc;
+    return _mongo.dbOperation((coll) async {
+      final existing = await coll.findOne({'_id': userId});
+      final doc =
+          existing != null
+              ? Map<String, dynamic>.from(existing)
+              : _emptyUser(userId);
+      doc['displayName'] = displayName ?? doc['displayName'];
+      doc['username'] = username ?? doc['username'];
+      doc['email'] = email ?? doc['email'];
+      doc['avatarUrl'] = avatarUrl ?? doc['avatarUrl'];
+      doc['phone'] = phone ?? doc['phone'];
+      doc['role'] = role ?? 'user';
+      await coll.replaceOne({'_id': userId}, doc, upsert: true);
+      return doc;
+    }, collectionName: _collection);
   }
 
   Future<Map<String, dynamic>?> findByUsernameOrEmail({
     String? username,
     String? email,
   }) async {
-    final coll = await _mongo.collection(_collection);
-    final query = <String, dynamic>{};
-    if (username != null) query['username'] = username;
-    if (email != null) query['email'] = email;
-    if (query.isEmpty) return null;
-    final doc = await coll.findOne(query);
-    return doc == null ? null : Map<String, dynamic>.from(doc);
+    return _mongo.dbOperation((coll) async {
+      final query = <String, dynamic>{};
+      if (username != null) query['username'] = username;
+      if (email != null) query['email'] = email;
+      if (query.isEmpty) return null;
+      final doc = await coll.findOne(query);
+      return doc == null ? null : Map<String, dynamic>.from(doc);
+    }, collectionName: _collection);
   }
 
   Future<Map<String, dynamic>> updateProfile(
