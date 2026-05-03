@@ -1,9 +1,14 @@
+import 'dart:convert';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 
 class LyricsService {
   Future<String?> fetchLyrics(String artistName, String title) async {
     final cleanTitle = title.replaceAll('Lyrics', '').replaceAll('Karaoke', '');
+
+    // Try lrclib first (has synced lyrics!)
+    final lyricsFromLrclib = await _fetchLyricsFromLrclib(artistName, cleanTitle);
+    if (lyricsFromLrclib != null) return lyricsFromLrclib;
 
     final lyricsFromGoogle = await _fetchLyricsFromGoogle(artistName, cleanTitle);
     if (lyricsFromGoogle != null) return lyricsFromGoogle;
@@ -19,6 +24,94 @@ class LyricsService {
       cleanTitle,
     );
     return lyricsFromLyricsMania;
+  }
+
+  Future<String?> _fetchLyricsFromLrclib(
+    String artistName,
+    String title,
+  ) async {
+    try {
+      // Try with specific parameters first
+      final searchUrl = Uri.parse(
+        'https://lrclib.net/api/get?artist_name=${Uri.encodeComponent(artistName)}&track_name=${Uri.encodeComponent(title)}',
+      );
+      var response = await http.get(searchUrl).timeout(const Duration(seconds: 10));
+      
+      // If no result, try with combined query
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['id'] == null) {
+          // Not found, try search
+          final q = '$artistName $title';
+          final searchUri = Uri.parse(
+            'https://lrclib.net/api/search?q=${Uri.encodeComponent(q)}',
+          );
+          response = await http.get(searchUri).timeout(const Duration(seconds: 10));
+          
+          if (response.statusCode == 200) {
+            final searchResults = jsonDecode(response.body) as List<dynamic>;
+            if (searchResults.isNotEmpty) {
+              // Get first result
+              final first = searchResults[0] as Map<String, dynamic>;
+              final getUri = Uri.parse(
+                'https://lrclib.net/api/get?id=${first['id']}',
+              );
+              response = await http.get(getUri).timeout(const Duration(seconds: 10));
+            }
+          }
+        }
+      }
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        // Try synced lyrics first
+        final synced = data['syncedLyrics'] as String?;
+        if (synced != null && synced.isNotEmpty) {
+          return _formatSyncedLyrics(synced);
+        }
+        
+        // Fall back to plain lyrics
+        final plain = data['plainLyrics'] as String?;
+        if (plain != null && plain.isNotEmpty) {
+          return plain;
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatSyncedLyrics(String synced) {
+    // Convert [mm:ss.xx]line format to plain text with metadata
+    final lines = synced.split('\n');
+    final formatted = StringBuffer();
+    
+    for (final line in lines) {
+      // Match [00:12.34] or [00:12] format
+      final match = RegExp(r'\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]').firstMatch(line);
+      if (match != null) {
+        final minutes = int.parse(match.group(1)!);
+        final seconds = int.parse(match.group(2)!);
+        final millis = match.group(3) != null 
+          ? int.parse(match.group(3)!.padRight(3, '0').substring(0, 3))
+          : 0;
+        final timeMs = (minutes * 60 * 1000) + (seconds * 1000) + millis;
+        final text = line.substring(match.end).trim();
+        
+        if (text.isNotEmpty) {
+          formatted.writeln('[$timeMs]$text');
+        }
+      } else {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) {
+          formatted.writeln(trimmed);
+        }
+      }
+    }
+    
+    return formatted.toString().trim();
   }
 
   Future<String?> _fetchLyricsFromGoogle(
