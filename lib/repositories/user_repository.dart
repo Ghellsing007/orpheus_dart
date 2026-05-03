@@ -219,6 +219,22 @@ class UserRepository {
     String? phone,
   }) async {
     return _mongo.dbOperation((coll) async {
+      // Check if email already exists
+      if (email != null && email.isNotEmpty) {
+        final existingEmail = await coll.findOne({'email': email});
+        if (existingEmail != null && existingEmail['_id'] != userId) {
+          throw Exception('El email ya está en uso');
+        }
+      }
+      
+      // Check if username already exists  
+      if (username != null && username.isNotEmpty) {
+        final existingUsername = await coll.findOne({'username': username});
+        if (existingUsername != null && existingUsername['_id'] != userId) {
+          throw Exception('El nombre de usuario ya está en uso');
+        }
+      }
+      
       final existing = await coll.findOne({'_id': userId});
       final doc =
           existing != null
