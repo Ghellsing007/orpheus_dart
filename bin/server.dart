@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
-import 'package:shelf_cors_headers/shelf_cors_headers.dart';
 import 'package:shelf_gzip/shelf_gzip.dart';
 import 'package:shelf_swagger_ui/shelf_swagger_ui.dart';
 
@@ -16,6 +15,24 @@ import 'package:orpheus_dart/services/mongo_service.dart';
 import 'package:orpheus_dart/services/recommendation_service.dart';
 import 'package:orpheus_dart/services/sponsorblock_service.dart';
 import 'package:orpheus_dart/services/youtube_service.dart';
+
+const _corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Origin, Content-Type, Accept, Authorization, X-Requested-With',
+};
+
+Middleware createCorsMiddleware() {
+  return (Handler innerHandler) {
+    return (Request request) async {
+      if (request.method == 'OPTIONS') {
+        return Response.ok('', headers: _corsHeaders);
+      }
+      final response = await innerHandler(request);
+      return response.change(headers: _corsHeaders);
+    };
+  };
+}
 
 void main(List<String> args) async {
   // Use any available host or container IP (usually `0.0.0.0`).
@@ -64,11 +81,14 @@ void main(List<String> args) async {
     deepLink: true,
   );
 
+  // Configure CORS middleware
+  final corsMiddleware = createCorsMiddleware();
+
   // Configure a pipeline that logs requests and enables CORS.
   final handler = Pipeline()
       .addMiddleware(gzipMiddleware)
       .addMiddleware(logRequests())
-      .addMiddleware(corsHeaders())
+      .addMiddleware(corsMiddleware)
       .addHandler((request) {
         final path = request.url.path;
         if (path.startsWith('docs')) {
