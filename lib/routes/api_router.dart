@@ -471,23 +471,32 @@ class ApiRouter {
       final username = body['username']?.toString();
       final email = body['email']?.toString();
       final avatarUrl = body['avatarUrl']?.toString();
-      final doc = await users.register(
-        userId: userId,
-        displayName: displayName,
-        username: username,
-        email: email,
-        avatarUrl: avatarUrl,
-        phone: body['phone']?.toString(),
-      );
-      return _json({
-        'userId': doc['_id'],
-        'displayName': doc['displayName'],
-        'username': doc['username'],
-        'email': doc['email'],
-        'avatarUrl': doc['avatarUrl'],
-        'phone': doc['phone'],
-        'role': doc['role'] ?? 'guest',
-      });
+      try {
+        final doc = await users.register(
+          userId: userId,
+          displayName: displayName,
+          username: username,
+          email: email,
+          avatarUrl: avatarUrl,
+          phone: body['phone']?.toString(),
+        );
+        return _json({
+          'userId': doc['_id'],
+          'displayName': doc['displayName'],
+          'username': doc['username'],
+          'email': doc['email'],
+          'avatarUrl': doc['avatarUrl'],
+          'phone': doc['phone'],
+          'role': doc['role'] ?? 'guest',
+        });
+      } catch (err) {
+        final message = err.toString();
+        if (message.contains('email ya está en uso') ||
+            message.contains('nombre de usuario ya está en uso')) {
+          return _json({'error': message.replaceFirst('Exception: ', '')}, status: 409);
+        }
+        return _json({'error': 'No se pudo registrar el usuario'}, status: 500);
+      }
     });
 
     router.post('/auth/profile', (Request req) async {
